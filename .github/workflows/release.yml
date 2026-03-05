@@ -18,6 +18,11 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Verify npm available
+        run: |
+          which npm
+          npm --version
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
         with:
@@ -31,12 +36,13 @@ jobs:
 
       - name: Install dependencies
         run: |
-          npm install
-          cd mobile && npm install
+          bun install
+          cd mobile && bun install
 
       - name: Generate native Android project
         working-directory: mobile
         run: |
+          echo "Using npm at: $(which npm)"
           npx expo prebuild --clean --platform android
 
       - name: Build release APK
