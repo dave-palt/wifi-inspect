@@ -32,29 +32,17 @@ jobs:
 
       - name: Install dependencies
         run: |
-          bun install
-          cd mobile && bun install
+          npm install
+          cd mobile && npm install
 
       - name: Generate native Android project
         working-directory: mobile
         run: |
-          echo "=== Checking mobile directory ==="
-          ls -la
-          echo "=== Running expo prebuild ==="
           npx expo prebuild --clean --platform android
-          echo "=== Checking if android directory exists ==="
-          ls -la
-          if [ ! -d "android" ]; then
-            echo "ERROR: Android directory not created!"
-            exit 1
-          fi
-          echo "=== Android directory created successfully ==="
 
       - name: Build release APK
         working-directory: mobile/android
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleRelease
+        run: ./gradlew assembleRelease
 
       - name: Get short SHA
         id: sha
