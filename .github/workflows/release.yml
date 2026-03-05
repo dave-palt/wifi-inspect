@@ -35,15 +35,11 @@ jobs:
           java-version: '17'
 
       - name: Install dependencies
-        run: |
-          bun install
-          cd mobile && bun install
+        run: bun install
 
       - name: Generate native Android project
         working-directory: mobile
-        run: |
-          echo "Using npm at: $(which npm)"
-          npx expo prebuild --clean --platform android
+        run: npx expo prebuild --clean --platform android
 
       - name: Build release APK
         working-directory: mobile/android
