@@ -1,0 +1,7 @@
+[install]
+optional = false
+
+[install.scopes]
+
+[run]
+shell = "bun"

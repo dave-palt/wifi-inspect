@@ -1,0 +1,75 @@
+name: Release Versioned Build
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Generate native Android project
+        working-directory: mobile
+        run: bunx expo prebuild --clean --platform android
+
+      - name: Build release APK
+        working-directory: mobile/android
+        run: ./gradlew assembleRelease
+
+      - name: Get version from tag
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Rename APK
+        run: |
+          mv mobile/android/app/build/outputs/apk/release/app-release.apk \
+             mobile/android/app/build/outputs/apk/release/camdetect-${{ steps.version.outputs.version }}.apk
+
+      - name: Create release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: CamDetect ${{ steps.version.outputs.version }}
+          body: |
+            ## CamDetect ${{ steps.version.outputs.version }}
+            
+            **Release Date:** ${{ github.event.head_commit.timestamp }}
+            
+            ### Downloads
+            - **Android APK:** `camdetect-${{ steps.version.outputs.version }}.apk`
+            
+            ### Installation
+            1. Download the APK
+            2. Enable "Install from unknown sources" on your Android device
+            3. Open the APK and follow the installation prompts
+            
+            ---
+            [View full changelog](https://github.com/${{ github.repository }}/commits/${{ steps.version.outputs.version }})
+          files: mobile/android/app/build/outputs/apk/release/camdetect-${{ steps.version.outputs.version }}.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

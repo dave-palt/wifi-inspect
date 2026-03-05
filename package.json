@@ -1,0 +1,30 @@
+{
+  "name": "wifi-inspect",
+  "version": "1.0.0",
+  "private": true,
+  "description": "WiFi Security Scanner - Detect cameras and suspicious devices on hotel/Airbnb networks",
+  "workspaces": [
+    "shared",
+    "mobile",
+    "server"
+  ],
+  "scripts": {
+    "dev": "bun run --cwd mobile dev & bun run --cwd server dev",
+    "dev:mobile": "bun run --cwd mobile dev",
+    "dev:server": "bun run --cwd server dev",
+    "build": "bun run build --cwd shared && bun run build --cwd mobile && bun run build --cwd server",
+    "typecheck": "bun run typecheck --cwd shared && bun run typecheck --cwd mobile && bun run typecheck --cwd server"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18",
+    "bun": ">=1.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dave-palt/wifi-inspect"
+  },
+  "license": "MIT"
+}
