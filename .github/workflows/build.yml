@@ -41,13 +41,11 @@ jobs:
           echo "=== Checking mobile directory ==="
           ls -la
           echo "=== Running expo prebuild ==="
-          npx expo prebuild --clean --platform android --verbose
+          npx expo prebuild --clean --platform android
           echo "=== Checking if android directory exists ==="
           ls -la
           if [ ! -d "android" ]; then
             echo "ERROR: Android directory not created!"
-            echo "=== Checking for error logs ==="
-            find . -name "*.log" -exec cat {} \;
             exit 1
           fi
           echo "=== Android directory created successfully ==="
