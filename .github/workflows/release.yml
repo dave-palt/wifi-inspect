@@ -37,9 +37,19 @@ jobs:
       - name: Generate native Android project
         working-directory: mobile
         run: |
-          npx expo prebuild --clean --platform android
+          echo "=== Checking mobile directory ==="
           ls -la
-          test -d android || { echo "Android directory not created!"; exit 1; }
+          echo "=== Running expo prebuild ==="
+          npx expo prebuild --clean --platform android --verbose
+          echo "=== Checking if android directory exists ==="
+          ls -la
+          if [ ! -d "android" ]; then
+            echo "ERROR: Android directory not created!"
+            echo "=== Checking for error logs ==="
+            find . -name "*.log" -exec cat {} \;
+            exit 1
+          fi
+          echo "=== Android directory created successfully ==="
 
       - name: Build release APK
         working-directory: mobile/android
