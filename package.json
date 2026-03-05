@@ -16,6 +16,7 @@
     "typecheck": "bun run typecheck --cwd shared && bun run typecheck --cwd mobile && bun run typecheck --cwd server"
   },
   "devDependencies": {
+    "expo-modules-autolinking": "~1.11.0",
     "typescript": "^5.3.3"
   },
   "engines": {
