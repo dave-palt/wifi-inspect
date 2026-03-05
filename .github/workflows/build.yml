@@ -31,19 +31,22 @@ jobs:
           java-version: '17'
 
       - name: Install dependencies
-        run: bun install
-
-      - name: Install mobile dependencies
-        working-directory: mobile
-        run: bun install
+        run: |
+          bun install
+          cd mobile && bun install
 
       - name: Generate native Android project
         working-directory: mobile
-        run: bunx --bun expo prebuild --clean --platform android
+        run: |
+          npx expo prebuild --clean --platform android
+          ls -la
+          test -d android || { echo "Android directory not created!"; exit 1; }
 
       - name: Build release APK
         working-directory: mobile/android
-        run: ./gradlew assembleRelease
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease
 
       - name: Get short SHA
         id: sha
