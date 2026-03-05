@@ -18,16 +18,6 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Verify npm available
-        run: |
-          which npm
-          npm --version
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
-
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
@@ -35,7 +25,7 @@ jobs:
           java-version: '17'
 
       - name: Install dependencies
-        run: bun install
+        run: npm install
 
       - name: Generate native Android project
         working-directory: mobile
