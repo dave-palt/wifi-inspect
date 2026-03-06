@@ -24,8 +24,22 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
       - name: Install dependencies
         run: npm install
+
+      - name: Cache Metro bundler
+        uses: actions/cache@v4
+        with:
+          path: |
+            mobile/.expo
+            mobile/node_modules/.cache
+            ~/.expo/metro-cache
+          key: metro-${{ runner.os }}-${{ hashFiles('mobile/package.json', 'package.json') }}
+          restore-keys: |
+            metro-${{ runner.os }}-
 
       - name: Generate native Android project
         working-directory: mobile
@@ -34,6 +48,31 @@ jobs:
       - name: Build release APK
         working-directory: mobile/android
         run: ./gradlew assembleRelease
+        env:
+          NODE_ENV: production
+
+      - name: Verify APK was built
+        id: verify-apk
+        run: |
+          echo "Checking for APK..."
+          if [ ! -f "mobile/android/app/build/outputs/apk/release/app-release.apk" ]; then
+            echo "❌ ERROR: APK not found!"
+            echo "Listing build outputs:"
+            find mobile/android/app/build/outputs -name "*.apk" || echo "No APK files found"
+            exit 1
+          fi
+          echo "✅ APK found"
+          ls -lh mobile/android/app/build/outputs/apk/release/app-release.apk
+          APK_SIZE=$(du -h mobile/android/app/build/outputs/apk/release/app-release.apk | cut -f1)
+          echo "apk_size=$APK_SIZE" >> $GITHUB_OUTPUT
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-apk-${{ steps.version.outputs.version }}
+          path: mobile/android/app/build/outputs/apk/release/*.apk
+          retention-days: 30
 
       - name: Get version from tag
         id: version
@@ -52,11 +91,22 @@ jobs:
             ## CamDetect ${{ steps.version.outputs.version }}
             
             **Release Date:** ${{ github.event.head_commit.timestamp }}
+            **APK Size:** ${{ steps.verify-apk.outputs.apk_size }}
             
-            ### Downloads
+            ### 📱 Downloads
             - **Android APK:** `camdetect-${{ steps.version.outputs.version }}.apk`
             
-            ### Installation
+            ### 🚀 What's Included
+            - WiFi network scanner
+            - IP camera detection
+            - Threat analysis
+            - NativeWind UI
+            
+            ### ⚙️ Requirements
+            - Android 6.0+ (API 23+)
+            - Location permission (for WiFi scanning)
+            
+            ### 📲 Installation
             1. Download the APK
             2. Enable "Install from unknown sources" on your Android device
             3. Open the APK and follow the installation prompts
@@ -68,3 +118,13 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs-${{ steps.version.outputs.version }}
+          path: |
+            mobile/android/app/build/reports
+            mobile/android/**/build.log
+          retention-days: 30
