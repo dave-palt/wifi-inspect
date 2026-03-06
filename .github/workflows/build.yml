@@ -48,23 +48,39 @@ jobs:
 
       - name: Build release APK
         working-directory: mobile/android
-        run: ./gradlew assembleRelease
+        run: |
+          echo "Building APK..."
+          ./gradlew assembleRelease --stacktrace
         env:
           NODE_ENV: production
+
+      - name: Find APK location
+        id: find-apk
+        run: |
+          echo "Searching for APK files..."
+          find mobile/android -name "*.apk" -type f || echo "No APKs found"
+          APK_PATH=$(find mobile/android/app/build/outputs/apk -name "*.apk" -type f | head -1)
+          if [ -z "$APK_PATH" ]; then
+            echo "❌ No APK found!"
+            echo "Listing build outputs:"
+            ls -la mobile/android/app/build/outputs/ || echo "No outputs directory"
+            exit 1
+          fi
+          echo "✅ APK found at: $APK_PATH"
+          echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
 
       - name: Verify APK was built
         id: verify-apk
         run: |
-          echo "Checking for APK..."
-          if [ ! -f "mobile/android/app/build/outputs/apk/release/app-release.apk" ]; then
+          APK_PATH="${{ steps.find-apk.outputs.apk_path }}"
+          echo "Checking APK: $APK_PATH"
+          if [ ! -f "$APK_PATH" ]; then
             echo "❌ ERROR: APK not found!"
-            echo "Listing build outputs:"
-            find mobile/android/app/build/outputs -name "*.apk" || echo "No APK files found"
             exit 1
           fi
           echo "✅ APK found"
-          ls -lh mobile/android/app/build/outputs/apk/release/app-release.apk
-          APK_SIZE=$(du -h mobile/android/app/build/outputs/apk/release/app-release.apk | cut -f1)
+          ls -lh "$APK_PATH"
+          APK_SIZE=$(du -h "$APK_PATH" | cut -f1)
           echo "apk_size=$APK_SIZE" >> $GITHUB_OUTPUT
 
       - name: Upload APK artifact
@@ -81,8 +97,11 @@ jobs:
 
       - name: Rename APK
         run: |
-          mv mobile/android/app/build/outputs/apk/release/app-release.apk \
-             mobile/android/app/build/outputs/apk/release/camdetect-android-${{ steps.sha.outputs.short }}.apk
+          APK_PATH="${{ steps.find-apk.outputs.apk_path }}"
+          APK_DIR=$(dirname "$APK_PATH")
+          mkdir -p mobile/android/app/build/outputs/apk/release
+          cp "$APK_PATH" mobile/android/app/build/outputs/apk/release/camdetect-android-${{ steps.sha.outputs.short }}.apk
+          echo "APK renamed to: camdetect-android-${{ steps.sha.outputs.short }}.apk"
 
       - name: Delete old latest release
         run: |
