@@ -28,26 +28,35 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Gradle
+      - name: Cache Gradle
         uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-home-cache-cleanup: true
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        id: cache-node-modules
+        with:
+          path: |
+            node_modules
+            mobile/node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('package-lock.json', 'mobile/package-lock.json') }}
+          restore-keys: node-modules-${{ runner.os }}-
+
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: npm-${{ runner.os }}-
 
       - name: Install dependencies
+        if: steps.cache-node-modules.outputs.cache-hit != 'true'
         run: |
           echo "Installing root dependencies..."
           npm install
           echo "Installing mobile dependencies..."
           cd mobile && npm install
-
-      - name: Cache Metro bundler
-        uses: actions/cache@v4
-        with:
-          path: |
-            mobile/.expo
-            mobile/node_modules/.cache
-            ~/.expo/metro-cache
-          key: metro-${{ runner.os }}-${{ hashFiles('mobile/package.json', 'package.json') }}
-          restore-keys: |
-            metro-${{ runner.os }}-
 
       - name: Generate native Android project
         working-directory: mobile
