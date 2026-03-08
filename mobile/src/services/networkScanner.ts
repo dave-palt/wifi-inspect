@@ -1,6 +1,6 @@
 import { NativeModules, Platform } from 'react-native';
 import type { Device, NetworkInfo, Port } from '@shared/src/types/device';
-import { getVendorFromMac } from './vendorLookup';
+import { getDeviceManufacturer } from './vendorLookup';
 import { classifyDevice } from './deviceClassifier';
 import { analyzeThreatLevel } from './threatAnalyzer';
 
@@ -91,7 +91,7 @@ export async function scanNetwork(
   for (const arpDevice of arpDevices) {
     const openPorts = await scanDevicePorts(arpDevice.ip);
     
-    const vendor = getVendorFromMac(arpDevice.mac);
+    const vendor = getDeviceManufacturer(arpDevice.mac);
     const deviceType = classifyDevice(arpDevice.mac, vendor, arpDevice.hostname, openPorts);
     const { threatLevel, reasons } = analyzeThreatLevel(deviceType, openPorts, networkInfo);
     

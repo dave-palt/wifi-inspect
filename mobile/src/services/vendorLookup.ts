@@ -1116,5 +1116,3 @@ export function lookupVendor(mac: string): string | undefined {
 export function getDeviceManufacturer(mac: string): string {
   return lookupVendor(mac) || 'Unknown';
 }
-
-export const getVendorFromMac = getDeviceManufacturer;
