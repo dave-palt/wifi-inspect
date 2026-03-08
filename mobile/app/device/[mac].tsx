@@ -1,12 +1,17 @@
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
-import { View, Text, ScrollView, TouchableOpacity, Alert, Linking } from 'react-native';
+import { View, Text, ScrollView, Alert, Linking, TouchableOpacity } from 'react-native';
+import { Video, Router as RouterIcon, Smartphone, Copy, ExternalLink, Shield, AlertTriangle } from 'lucide-react-native';
 import { useDeviceStore } from '../../src/stores/scanStore';
 import { useCallback, useState } from 'react';
 import { Clipboard } from 'react-native';
 import { apiService } from '../../src/services/api';
 import { hashBssid } from '../../src/utils/crypto';
+import { Card } from '../../src/components/Card';
+import { Button } from '../../src/components/Button';
+import { Badge } from '../../src/components/Badge';
+import { ThreatMeter } from '../../src/components/ThreatMeter';
 
-const getThreatColor = (level?: number) => {
+const getThreatColor = (level?: number): string => {
   if (!level || level === 0) return '#94a3b8';
   if (level <= 1) return '#4ade80';
   if (level <= 2) return '#facc15';
@@ -107,7 +112,7 @@ export default function DeviceDetailScreen() {
 
   if (!device) {
     return (
-      <View className="flex-1 bg-slate-900 items-center justify-center">
+      <View className="flex-1 bg-slate-950 items-center justify-center">
         <Text className="text-white text-lg">Device not found</Text>
         <TouchableOpacity className="mt-4" onPress={() => router.back()}>
           <Text className="text-blue-400">Go back</Text>
@@ -117,159 +122,158 @@ export default function DeviceDetailScreen() {
   }
 
   const threatLevel = device.threatLevel ?? 0;
+  const isCamera = device.deviceType === 'camera';
 
   return (
     <>
       <Stack.Screen options={{ title: device.vendor || 'Device Details' }} />
-      <ScrollView className="flex-1 bg-slate-900 px-4">
-        <View className="py-6">
-          {/* Header Card */}
-          <View className="bg-slate-800 rounded-xl p-4 border border-slate-700 mb-4">
-            <View className="flex-row items-center gap-3 mb-4">
-              <Text className="text-4xl">
-                {device.deviceType === 'camera' ? '📹' : 
-                 device.deviceType === 'router' ? '📡' : '📱'}
-              </Text>
-              <View>
+      <ScrollView className="flex-1 bg-slate-950">
+        <View className="p-5">
+          <Card className="mb-4">
+            <View className="p-5 flex-row items-center gap-4">
+              <View className={`w-14 h-14 rounded-2xl items-center justify-center ${isCamera ? 'bg-red-900/30' : 'bg-slate-700/50'}`}>
+                {isCamera ? (
+                  <Video size={28} color="#ef4444" />
+                ) : device.deviceType === 'router' ? (
+                  <RouterIcon size={28} color="#3b82f6" />
+                ) : (
+                  <Smartphone size={28} color="#94a3b8" />
+                )}
+              </View>
+              <View className="flex-1">
                 <Text className="text-white text-xl font-semibold">
                   {device.vendor || 'Unknown Device'}
                 </Text>
                 {device.hostname && (
-                  <Text className="text-slate-400">{device.hostname}</Text>
+                  <Text className="text-slate-400 text-sm">{device.hostname}</Text>
+                )}
+                {isCamera && (
+                  <Badge variant="danger" size="md">Camera Detected</Badge>
                 )}
               </View>
             </View>
+          </Card>
 
-            {/* IP & MAC */}
-            <TouchableOpacity
-              className="flex-row justify-between items-center py-2"
-              onPress={() => handleCopy(device.ip, 'IP address')}
-            >
-              <Text className="text-slate-400">IP Address</Text>
-              <View className="flex-row items-center gap-2">
-                <Text className="text-white">{device.ip}</Text>
-                <Text className="text-slate-500">📋</Text>
-              </View>
-            </TouchableOpacity>
-            <TouchableOpacity
-              className="flex-row justify-between items-center py-2"
-              onPress={() => handleCopy(device.mac, 'MAC address')}
-            >
-              <Text className="text-slate-400">MAC Address</Text>
-              <View className="flex-row items-center gap-2">
-                <Text className="text-white">{device.mac}</Text>
-                <Text className="text-slate-500">📋</Text>
-              </View>
-            </TouchableOpacity>
-            {device.signalStrength && (
-              <View className="flex-row justify-between items-center py-2">
-                <Text className="text-slate-400">Signal Strength</Text>
-                <Text className="text-white">{device.signalStrength} dBm</Text>
-              </View>
-            )}
-          </View>
-
-          {/* Threat Analysis */}
-          {threatLevel > 0 && (
-            <View className="bg-slate-800 rounded-xl p-4 border border-slate-700 mb-4">
-              <Text className="text-white font-semibold mb-3">Security Analysis</Text>
-              
-              <View className="flex-row items-center gap-3 mb-3">
-                <View className="flex-1 h-3 bg-slate-700 rounded-full overflow-hidden">
-                  <View
-                    className="h-full rounded-full"
-                    style={{
-                      width: `${(threatLevel / 5) * 100}%`,
-                      backgroundColor: getThreatColor(threatLevel),
-                    }}
-                  />
+          <Card className="mb-4">
+            <View className="p-4">
+              <TouchableOpacity
+                className="flex-row justify-between items-center py-2"
+                onPress={() => handleCopy(device.ip, 'IP address')}
+              >
+                <Text className="text-slate-400">IP Address</Text>
+                <View className="flex-row items-center gap-2">
+                  <Text className="text-white font-medium">{device.ip}</Text>
+                  <Copy size={16} color="#64748b" />
                 </View>
-                <Text
-                  className="font-bold"
-                  style={{ color: getThreatColor(threatLevel) }}
-                >
-                  {threatLevel}/5
-                </Text>
-              </View>
-
-              {device.threatReasons && device.threatReasons.length > 0 && (
-                <View className="gap-2">
-                  {device.threatReasons.map((reason, index) => (
-                    <View key={index} className="flex-row items-start gap-2">
-                      <Text className="text-red-400">⚠️</Text>
-                      <Text className="text-slate-300 flex-1">{reason}</Text>
-                    </View>
-                  ))}
+              </TouchableOpacity>
+              <TouchableOpacity
+                className="flex-row justify-between items-center py-2"
+                onPress={() => handleCopy(device.mac, 'MAC address')}
+              >
+                <Text className="text-slate-400">MAC Address</Text>
+                <View className="flex-row items-center gap-2">
+                  <Text className="text-white font-medium">{device.mac}</Text>
+                  <Copy size={16} color="#64748b" />
+                </View>
+              </TouchableOpacity>
+              {device.signalStrength && (
+                <View className="flex-row justify-between items-center py-2">
+                  <Text className="text-slate-400">Signal Strength</Text>
+                  <Text className="text-white font-medium">{device.signalStrength} dBm</Text>
                 </View>
               )}
             </View>
+          </Card>
+
+          {threatLevel > 0 && (
+            <Card className="mb-4">
+              <View className="p-4">
+                <View className="flex-row items-center gap-2 mb-3">
+                  <Shield size={18} color={getThreatColor(threatLevel)} />
+                  <Text className="text-white font-semibold">Security Analysis</Text>
+                </View>
+                <ThreatMeter level={threatLevel} size="lg" />
+                {device.threatReasons && device.threatReasons.length > 0 && (
+                  <View className="mt-4 gap-2">
+                    {device.threatReasons.map((reason, index) => (
+                      <View key={index} className="flex-row items-start gap-2">
+                        <AlertTriangle size={14} color="#f87171" />
+                        <Text className="text-slate-300 flex-1 text-sm">{reason}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+            </Card>
           )}
 
-          {/* Open Ports */}
           {device.openPorts && device.openPorts.length > 0 && (
-            <View className="bg-slate-800 rounded-xl p-4 border border-slate-700 mb-4">
-              <Text className="text-white font-semibold mb-3">
-                Open Ports ({device.openPorts.length})
-              </Text>
-              <View className="gap-3">
-                {device.openPorts.map((port) => (
-                  <View key={port.number} className="bg-slate-900 rounded-lg p-3">
-                    <View className="flex-row items-center justify-between mb-2">
-                      <View className="flex-row items-center gap-2">
-                        <Text className="text-xl">{getServiceIcon(port.service)}</Text>
-                        <Text className="text-white font-medium">
-                          {port.service || 'Unknown'} ({port.number})
-                        </Text>
+            <Card className="mb-4">
+              <View className="p-4">
+                <View className="flex-row items-center justify-between mb-3">
+                  <Text className="text-white font-semibold">Open Ports</Text>
+                  <Badge>{device.openPorts.length}</Badge>
+                </View>
+                <View className="gap-3">
+                  {device.openPorts.map((port) => (
+                    <View key={port.number} className="bg-slate-900 rounded-xl p-3">
+                      <View className="flex-row items-center justify-between mb-2">
+                        <View className="flex-row items-center gap-2">
+                          <Text className="text-lg">{getServiceIcon(port.service)}</Text>
+                          <View>
+                            <Text className="text-white font-medium">{port.service || 'Unknown'}</Text>
+                            <Text className="text-slate-500 text-xs">Port {port.number}</Text>
+                          </View>
+                        </View>
+                        <Button
+                          size="sm"
+                          icon={<ExternalLink size={14} color="#fff" />}
+                          onPress={() => handleOpenPort(device.ip, port.number, port.service)}
+                        >
+                          Open
+                        </Button>
                       </View>
-                      <TouchableOpacity
-                        className="bg-blue-600 px-3 py-1 rounded"
-                        onPress={() => handleOpenPort(device.ip, port.number, port.service)}
-                      >
-                        <Text className="text-white text-sm">Open</Text>
-                      </TouchableOpacity>
+                      <Text className="text-slate-400 text-sm">{port.description}</Text>
                     </View>
-                    <Text className="text-slate-400 text-sm">{port.description}</Text>
-                  </View>
-                ))}
+                  ))}
+                </View>
+              </View>
+            </Card>
+          )}
+
+          <Card className="mb-4">
+            <View className="p-4">
+              <Text className="text-white font-semibold mb-3">Quick Actions</Text>
+              <View className="flex-row gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="flex-1"
+                  onPress={() => handleCopy(device.ip, 'IP address')}
+                >
+                  Copy IP
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="flex-1"
+                  onPress={() => handleCopy(device.mac, 'MAC address')}
+                >
+                  Copy MAC
+                </Button>
               </View>
             </View>
-          )}
+          </Card>
 
-          {/* Quick Actions */}
-          <View className="bg-slate-800 rounded-xl p-4 border border-slate-700 mb-4">
-            <Text className="text-white font-semibold mb-3">Quick Actions</Text>
-            <View className="flex-row gap-2">
-              <TouchableOpacity
-                className="flex-1 bg-slate-700 py-2 rounded-lg"
-                onPress={() => handleCopy(device.ip, 'IP address')}
-              >
-                <Text className="text-white text-center text-sm">Copy IP</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                className="flex-1 bg-slate-700 py-2 rounded-lg"
-                onPress={() => handleCopy(device.mac, 'MAC address')}
-              >
-                <Text className="text-white text-center text-sm">Copy MAC</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                className="flex-1 bg-slate-700 py-2 rounded-lg"
-                onPress={() => {}}
-              >
-                <Text className="text-white text-center text-sm">Ping</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Report */}
-          <TouchableOpacity
-            className={`bg-red-900/50 border border-red-800 rounded-xl p-4 ${isReporting ? 'opacity-50' : ''}`}
+          <Button
+            variant="danger"
+            fullWidth
+            loading={isReporting}
             onPress={handleReport}
-            disabled={isReporting}
+            icon={<AlertTriangle size={18} color="#fff" />}
           >
-            <Text className="text-red-400 text-center font-medium">
-              {isReporting ? 'Reporting...' : 'Report Suspicious Device'}
-            </Text>
-          </TouchableOpacity>
+            Report Suspicious Device
+          </Button>
         </View>
       </ScrollView>
     </>

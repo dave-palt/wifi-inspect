@@ -1,19 +1,18 @@
 import { Tabs } from 'expo-router';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Radio, Smartphone, Bell, Settings } from 'lucide-react-native';
 
 function TabIcon({ name, focused }: { name: string; focused: boolean }) {
-  const icons: Record<string, string> = {
-    scan: '📡',
-    devices: '📱',
-    alerts: '⚠️',
-    settings: '⚙️',
-  };
+  const color = focused ? '#3b82f6' : '#64748b';
+  const size = 22;
 
-  return (
-    <View className="items-center justify-center">
-      <Text className="text-2xl">{icons[name] || '•'}</Text>
-    </View>
-  );
+  switch (name) {
+    case 'scan': return <Radio size={size} color={color} />;
+    case 'devices': return <Smartphone size={size} color={color} />;
+    case 'alerts': return <Bell size={size} color={color} />;
+    case 'settings': return <Settings size={size} color={color} />;
+    default: return null;
+  }
 }
 
 export default function TabLayout() {
@@ -21,22 +20,28 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         tabBarStyle: {
-          backgroundColor: '#1e293b',
-          borderTopColor: '#334155',
+          backgroundColor: '#0f172a',
+          borderTopColor: '#1e293b',
           borderTopWidth: 1,
-          height: 60,
-          paddingBottom: 8,
+          height: 64,
+          paddingBottom: 10,
           paddingTop: 8,
         },
         tabBarActiveTintColor: '#3b82f6',
-        tabBarInactiveTintColor: '#94a3b8',
+        tabBarInactiveTintColor: '#64748b',
         tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '500',
+          fontSize: 11,
+          fontWeight: '600',
+          marginTop: 4,
         },
-        headerStyle: { backgroundColor: '#0f172a' },
+        headerStyle: { 
+          backgroundColor: '#0f172a',
+          elevation: 0,
+          shadowOpacity: 0,
+        },
         headerTintColor: '#fff',
         headerTitleStyle: { fontWeight: '600' },
+        headerShadowVisible: false,
       }}
     >
       <Tabs.Screen
