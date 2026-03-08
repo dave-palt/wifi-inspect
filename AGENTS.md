@@ -30,6 +30,7 @@ When adding new Expo packages, use versions compatible with **Expo SDK 51**:
 | expo-status-bar | ~1.12.0 |
 | expo-system-ui | ~3.0.0 |
 | react-native | 0.74.5 |
+| react-native-svg | 15.2.0 |
 
 Check [Expo SDK 51 docs](https://docs.expo.dev/versions/v51.0.0/) for compatible versions.
 
