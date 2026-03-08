@@ -19,7 +19,7 @@ export function useAlerts() {
         id: parseInt(a.ssid.charCodeAt(0).toString()) || 0,
         type: a.alertType,
         severity: a.severity,
-        description: a.description,
+        description: `${a.alertType.replace(/_/g, ' ')} detected on network "${a.ssid}"`,
         createdAt: a.reportedAt,
       }));
       
