@@ -12,6 +12,27 @@ WiFi Inspector (CamDetect) is a cross-platform application for detecting IP came
 - **Backend**: Bun.js, PostgreSQL
 - **Architecture**: Monorepo with workspaces
 
+## Version Requirements
+
+When adding new Expo packages, use versions compatible with **Expo SDK 51**:
+
+| Package | Version |
+|---------|---------|
+| expo | ~51.0.0 |
+| expo-haptics | ~14.0.0 |
+| expo-router | ~3.5.0 |
+| expo-constants | ~16.0.0 |
+| expo-linking | ~6.3.0 |
+| expo-location | ~17.0.0 |
+| expo-secure-store | ~13.0.0 |
+| expo-splash-screen | ~0.27.0 |
+| expo-sqlite | ~14.0.0 |
+| expo-status-bar | ~1.12.0 |
+| expo-system-ui | ~3.0.0 |
+| react-native | 0.74.5 |
+
+Check [Expo SDK 51 docs](https://docs.expo.dev/versions/v51.0.0/) for compatible versions.
+
 ## Running the Project
 
 ### Development
