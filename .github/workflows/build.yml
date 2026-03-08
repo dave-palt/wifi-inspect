@@ -28,10 +28,8 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Cache Gradle
+      - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-home-cache-cleanup: true
 
       - name: Cache node_modules
         uses: actions/cache@v4
