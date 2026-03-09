@@ -1,0 +1,25 @@
+{
+  "name": "network-scanner",
+  "version": "1.0.0",
+  "description": "Native network scanner module for WiFi device discovery",
+  "main": "src/index.ts",
+  "scripts": {},
+  "keywords": [
+    "react-native",
+    "expo",
+    "network",
+    "scanner",
+    "wifi"
+  ],
+  "author": "CamDetect",
+  "license": "MIT",
+  "react-native": "src/index.ts",
+  "source": "src/index.ts",
+  "module": "src/index.ts",
+  "types": "src/index.ts",
+  "peerDependencies": {
+    "expo": "*",
+    "react": "*",
+    "react-native": "*"
+  }
+}

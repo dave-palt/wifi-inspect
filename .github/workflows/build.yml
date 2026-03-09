@@ -58,13 +58,19 @@ jobs:
         working-directory: mobile
         run: npx expo prebuild --clean --platform android
 
-      - name: Copy native module to Android project
+      - name: Verify native module autolinking
         run: |
-          echo "Copying NetworkScanner native module..."
-          mkdir -p mobile/android/app/src/main/java/com/camdetect/app
-          cp -r mobile/src/native/android/src/main/java/com/camdetect/app/*.java mobile/android/app/src/main/java/com/camdetect/app/
-          echo "Native module files copied successfully"
-          ls -la mobile/android/app/src/main/java/com/camdetect/app/
+          echo "Verifying NetworkScanner module was autolinked..."
+          if grep -q "NetworkScannerPackage" mobile/android/app/src/main/java/com/camdetect/app/MainApplication.java; then
+            echo "✅ NetworkScannerPackage found in MainApplication.java"
+          else
+            echo "⚠️ NetworkScannerPackage not found - checking autolinking..."
+            cat mobile/android/app/src/main/java/com/camdetect/app/MainApplication.java | head -50
+          fi
+          if [ -d "mobile/android/app/src/main/java/com/camdetect/app" ]; then
+            echo "✅ Native module files present:"
+            ls -la mobile/android/app/src/main/java/com/camdetect/app/*.java 2>/dev/null || echo "No Java files found"
+          fi
 
       - name: Build release APK
         working-directory: mobile/android

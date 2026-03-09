@@ -1,43 +1,18 @@
-import { NativeModules, Platform } from 'react-native';
+import { Platform } from 'react-native';
+import NetworkScanner, { 
+  isNativeModuleAvailable, 
+  getNetworkInfo as nativeGetNetworkInfo,
+  getArpTable as nativeGetArpTable,
+  scanPorts as nativeScanPorts,
+  ping as nativePing,
+  type NetworkInfo as NativeNetworkInfoResponse
+} from 'network-scanner';
 import type { Device, NetworkInfo, Port } from '@shared/src/types/device';
 import { getDeviceManufacturer } from './vendorLookup';
 import { classifyDevice } from './deviceClassifier';
 import { analyzeThreatLevel } from './threatAnalyzer';
 
 const TAG = 'NetworkScanner';
-
-interface NativeNetworkInfoResponse {
-  ssid?: string;
-  bssid?: string;
-  ip?: string;
-  deviceIp?: string;
-  gateway?: number;
-  subnet?: number;
-  rssi?: number;
-  success?: boolean;
-  error?: string;
-  message?: string;
-  wifiEnabled?: boolean;
-}
-
-interface NativeNetworkScanner {
-  getNetworkInfo(): Promise<NativeNetworkInfoResponse>;
-  getArpTable(): Promise<Array<{ mac: string; ip: string; hostname?: string }>>;
-  scanPorts(ip: string, ports: number[]): Promise<Array<{
-    number: number;
-    protocol: string;
-    state: string;
-    service?: string;
-  }>>;
-  ping(ip: string): Promise<{ success: boolean; time?: number }>;
-}
-
-const NetworkScanner: NativeNetworkScanner = NativeModules.NetworkScanner || {
-  getNetworkInfo: async () => ({ error: 'NATIVE_MODULE_UNAVAILABLE' }),
-  getArpTable: async () => [],
-  scanPorts: async () => [],
-  ping: async () => ({ success: false }),
-};
 
 export interface NetworkInfoError {
   type: 'permission' | 'not_connected' | 'no_ip' | 'native_unavailable' | 'unknown';
@@ -59,7 +34,7 @@ export async function getNetworkInfoWithDebug(): Promise<NetworkInfoResult> {
   try {
     console.log(`[${TAG}] Getting network info...`);
     
-    const info = await NetworkScanner.getNetworkInfo();
+    const info = await nativeGetNetworkInfo();
     
     console.log(`[${TAG}] Native response:`, JSON.stringify(info));
     
@@ -166,7 +141,7 @@ export async function scanNetwork(
   let arpDevices: Array<{ mac: string; ip: string; hostname?: string }> = [];
   
   try {
-    arpDevices = await NetworkScanner.getArpTable();
+    arpDevices = await nativeGetArpTable();
     console.log(`[${TAG}] Found ${arpDevices.length} devices via ARP`);
   } catch (error) {
     console.log(`[${TAG}] ARP table not available, using ping sweep`);
@@ -238,10 +213,10 @@ async function scanDevicePorts(ip: string): Promise<Port[]> {
   ];
   
   try {
-    const results = await NetworkScanner.scanPorts(ip, commonPorts);
+    const results = await nativeScanPorts(ip, commonPorts);
     return results
-      .filter(p => p.state === 'open')
-      .map(p => ({
+      .filter((p: { state: string }) => p.state === 'open')
+      .map((p: { number: number; protocol: string; service?: string; state: string }) => ({
         number: p.number,
         protocol: p.protocol as 'tcp' | 'udp',
         service: p.service,
@@ -268,7 +243,7 @@ async function pingSweep(subnet: string): Promise<Array<{ mac: string; ip: strin
       promises.push(
         (async () => {
           try {
-            const result = await NetworkScanner.ping(ip);
+            const result = await nativePing(ip);
             if (result.success) {
               devices.push({
                 mac: generateMockMac(),
@@ -316,12 +291,10 @@ function generateMockMac(): string {
 
 export async function pingDevice(ip: string): Promise<{ success: boolean; time?: number }> {
   try {
-    return await NetworkScanner.ping(ip);
+    return await nativePing(ip);
   } catch {
     return { success: false };
   }
 }
 
-export function isNativeModuleAvailable(): boolean {
-  return !!NativeModules.NetworkScanner;
-}
+export { isNativeModuleAvailable };
