@@ -4,16 +4,24 @@ import { getDeviceManufacturer } from './vendorLookup';
 import { classifyDevice } from './deviceClassifier';
 import { analyzeThreatLevel } from './threatAnalyzer';
 
+const TAG = 'NetworkScanner';
+
+interface NativeNetworkInfoResponse {
+  ssid?: string;
+  bssid?: string;
+  ip?: string;
+  deviceIp?: string;
+  gateway?: number;
+  subnet?: number;
+  rssi?: number;
+  success?: boolean;
+  error?: string;
+  message?: string;
+  wifiEnabled?: boolean;
+}
+
 interface NativeNetworkScanner {
-  getNetworkInfo(): Promise<{
-    ssid?: string;
-    bssid?: string;
-    ip?: string;
-    deviceIp?: string;
-    gateway?: number;
-    subnet?: number;
-    rssi?: number;
-  }>;
+  getNetworkInfo(): Promise<NativeNetworkInfoResponse>;
   getArpTable(): Promise<Array<{ mac: string; ip: string; hostname?: string }>>;
   scanPorts(ip: string, ports: number[]): Promise<Array<{
     number: number;
@@ -25,21 +33,84 @@ interface NativeNetworkScanner {
 }
 
 const NetworkScanner: NativeNetworkScanner = NativeModules.NetworkScanner || {
-  getNetworkInfo: async () => ({}),
+  getNetworkInfo: async () => ({ error: 'NATIVE_MODULE_UNAVAILABLE' }),
   getArpTable: async () => [],
   scanPorts: async () => [],
   ping: async () => ({ success: false }),
 };
 
+export interface NetworkInfoError {
+  type: 'permission' | 'not_connected' | 'no_ip' | 'native_unavailable' | 'unknown';
+  message: string;
+  wifiEnabled?: boolean;
+}
+
+export interface NetworkInfoResult {
+  networkInfo: NetworkInfo | null;
+  error: NetworkInfoError | null;
+}
+
 export async function getNetworkInfo(): Promise<NetworkInfo | null> {
+  const result = await getNetworkInfoWithDebug();
+  return result.networkInfo;
+}
+
+export async function getNetworkInfoWithDebug(): Promise<NetworkInfoResult> {
   try {
+    console.log(`[${TAG}] Getting network info...`);
+    
     const info = await NetworkScanner.getNetworkInfo();
     
-    if (!info || !info.deviceIp || info.deviceIp === '0.0.0.0') {
-      return null;
+    console.log(`[${TAG}] Native response:`, JSON.stringify(info));
+    
+    if (!info) {
+      console.log(`[${TAG}] No response from native module`);
+      return {
+        networkInfo: null,
+        error: { type: 'unknown', message: 'No response from network scanner' },
+      };
+    }
+    
+    if (info.error) {
+      console.log(`[${TAG}] Native error: ${info.error} - ${info.message}`);
+      
+      let errorType: NetworkInfoError['type'];
+      switch (info.error) {
+        case 'PERMISSION_DENIED':
+          errorType = 'permission';
+          break;
+        case 'NOT_CONNECTED':
+          errorType = 'not_connected';
+          break;
+        case 'NO_IP':
+          errorType = 'no_ip';
+          break;
+        case 'NATIVE_MODULE_UNAVAILABLE':
+          errorType = 'native_unavailable';
+          break;
+        default:
+          errorType = 'unknown';
+      }
+      
+      return {
+        networkInfo: null,
+        error: {
+          type: errorType,
+          message: info.message || 'Unknown error',
+          wifiEnabled: info.wifiEnabled,
+        },
+      };
+    }
+    
+    if (!info.deviceIp || info.deviceIp === '0.0.0.0') {
+      console.log(`[${TAG}] Invalid device IP: ${info.deviceIp}`);
+      return {
+        networkInfo: null,
+        error: { type: 'no_ip', message: 'Could not get device IP address' },
+      };
     }
 
-    return {
+    const networkInfo: NetworkInfo = {
       ssid: info.ssid || 'Connected WiFi',
       bssid: info.bssid || '',
       ip: info.deviceIp || info.ip || '0.0.0.0',
@@ -49,18 +120,35 @@ export async function getNetworkInfo(): Promise<NetworkInfo | null> {
       securityType: 'wpa2',
       signalStrength: info.rssi || -100,
     };
+    
+    console.log(`[${TAG}] Success: SSID=${networkInfo.ssid}, IP=${networkInfo.ip}`);
+    
+    return { networkInfo, error: null };
   } catch (error) {
-    console.error('Error getting network info:', error);
-    return null;
+    console.error(`[${TAG}] Exception:`, error);
+    return {
+      networkInfo: null,
+      error: {
+        type: 'unknown',
+        message: error instanceof Error ? error.message : 'Unknown error occurred',
+      },
+    };
   }
 }
 
 export async function scanNetwork(
   onProgress?: (progress: number) => void
 ): Promise<Device[]> {
+  console.log(`[${TAG}] Starting network scan...`);
   onProgress?.(10);
   
-  const networkInfo = await getNetworkInfo();
+  const result = await getNetworkInfoWithDebug();
+  if (result.error) {
+    console.log(`[${TAG}] Scan failed: ${result.error.message}`);
+    throw new Error(result.error.message);
+  }
+  
+  const networkInfo = result.networkInfo;
   if (!networkInfo) {
     throw new Error('Not connected to network');
   }
@@ -71,16 +159,19 @@ export async function scanNetwork(
   const subnet = getSubnet(networkInfo.ip);
   const devices: Device[] = [];
   
+  console.log(`[${TAG}] Scanning subnet: ${subnet}.x, Gateway: ${gatewayIp}`);
+  
   onProgress?.(30);
   
   let arpDevices: Array<{ mac: string; ip: string; hostname?: string }> = [];
   
   try {
     arpDevices = await NetworkScanner.getArpTable();
+    console.log(`[${TAG}] Found ${arpDevices.length} devices via ARP`);
   } catch (error) {
-    console.log('ARP table not available, using fallback');
-    // Fallback: ping sweep the subnet
+    console.log(`[${TAG}] ARP table not available, using ping sweep`);
     arpDevices = await pingSweep(subnet);
+    console.log(`[${TAG}] Found ${arpDevices.length} devices via ping sweep`);
   }
   
   onProgress?.(50);
@@ -115,7 +206,6 @@ export async function scanNetwork(
     onProgress?.(50 + Math.floor((processed / totalDevices) * 40));
   }
   
-  // Ensure gateway is in the list
   if (!devices.find(d => d.isGateway)) {
     const gatewayPorts = await scanDevicePorts(gatewayIp);
     const { threatLevel, reasons } = analyzeThreatLevel('router', gatewayPorts, networkInfo);
@@ -134,6 +224,7 @@ export async function scanNetwork(
     });
   }
   
+  console.log(`[${TAG}] Scan complete: ${devices.length} devices found`);
   onProgress?.(100);
   
   return devices;
@@ -157,7 +248,7 @@ async function scanDevicePorts(ip: string): Promise<Port[]> {
         state: 'open' as const,
       }));
   } catch (error) {
-    console.error('Port scan error:', error);
+    console.error(`[${TAG}] Port scan error for ${ip}:`, error);
     return [];
   }
 }
@@ -229,4 +320,8 @@ export async function pingDevice(ip: string): Promise<{ success: boolean; time?:
   } catch {
     return { success: false };
   }
+}
+
+export function isNativeModuleAvailable(): boolean {
+  return !!NativeModules.NetworkScanner;
 }

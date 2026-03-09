@@ -1,8 +1,8 @@
 import { useState, useCallback, useEffect } from 'react';
 import { View, Text, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Radio, Shield, AlertTriangle } from 'lucide-react-native';
-import { useNetworkScan } from '../../src/hooks/useNetworkScan';
+import { Radio, Shield, AlertTriangle, MapPin, Settings, RefreshCw } from 'lucide-react-native';
+import { useNetworkScan, ScanBlockReason } from '../../src/hooks/useNetworkScan';
 import { useDeviceStore } from '../../src/stores/scanStore';
 import { useAlertsStore } from '../../src/stores/alertsStore';
 import { apiService } from '../../src/services/api';
@@ -16,13 +16,58 @@ import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
 import { Badge } from '../../src/components/Badge';
 
+function getBlockReasonIcon(reason: ScanBlockReason) {
+  switch (reason) {
+    case 'no_permission':
+    case 'permission_denied_permanent':
+      return <MapPin size={24} color={colors.warning} />;
+    case 'location_disabled':
+      return <MapPin size={24} color={colors.warning} />;
+    case 'not_connected':
+      return <Radio size={24} color={colors.text.tertiary} />;
+    default:
+      return <AlertTriangle size={24} color={colors.warning} />;
+  }
+}
+
+function getBlockReasonAction(
+  reason: ScanBlockReason, 
+  onRequestPermission: () => void,
+  onOpenSettings: () => void,
+  onEnableLocation: () => void,
+  onRetry: () => void
+): { label: string; onPress: () => void } | null {
+  switch (reason) {
+    case 'no_permission':
+      return { label: 'Grant Permission', onPress: onRequestPermission };
+    case 'permission_denied_permanent':
+      return { label: 'Open Settings', onPress: onOpenSettings };
+    case 'location_disabled':
+      return { label: 'Enable Location', onPress: onEnableLocation };
+    case 'native_unavailable':
+      return { label: 'Retry', onPress: onRetry };
+    default:
+      return { label: 'Retry', onPress: onRetry };
+  }
+}
+
 export default function ScanScreen() {
   const router = useRouter();
-  const [isScanning, setIsScanning] = useState(false);
   const [isCheckingNetwork, setIsCheckingNetwork] = useState(false);
   const [isReporting, setIsReporting] = useState(false);
   const [showNetworkSheet, setShowNetworkSheet] = useState(false);
-  const { startScan, scanProgress, currentNetwork } = useNetworkScan();
+  
+  const { 
+    startScan, 
+    scanProgress, 
+    currentNetwork, 
+    blockReason, 
+    blockMessage,
+    canScan,
+    retry,
+    permissions,
+  } = useNetworkScan();
+  
   const { devices, lastScanTime } = useDeviceStore();
   const { networkAlerts, networkReputation, totalReports, setNetworkAlerts, setNetworkReputation, setTotalReports, setIsLoading } = useAlertsStore();
 
@@ -56,17 +101,41 @@ export default function ScanScreen() {
   }, [currentNetwork?.ssid]);
 
   const handleScan = useCallback(async () => {
-    if (isScanning) return;
+    if (!canScan) return;
     
-    setIsScanning(true);
     try {
       await startScan();
     } catch (error) {
-      Alert.alert('Scan Error', 'Failed to scan network. Please try again.');
-    } finally {
-      setIsScanning(false);
+      const message = error instanceof Error ? error.message : 'Failed to scan network. Please try again.';
+      Alert.alert('Scan Error', message);
     }
-  }, [isScanning, startScan]);
+  }, [canScan, startScan]);
+
+  const handleRequestPermission = useCallback(async () => {
+    const granted = await permissions.requestPermission();
+    if (!granted && permissions.locationPermission === 'permanently_denied') {
+      Alert.alert(
+        'Permission Required',
+        'Location permission is permanently denied. Please enable it in Settings.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => permissions.openSettings() },
+        ]
+      );
+    }
+  }, [permissions]);
+
+  const handleOpenSettings = useCallback(() => {
+    permissions.openSettings();
+  }, [permissions]);
+
+  const handleEnableLocation = useCallback(() => {
+    permissions.promptEnableLocation();
+  }, [permissions]);
+
+  const handleRetry = useCallback(async () => {
+    await retry();
+  }, [retry]);
 
   const handleReportNetwork = useCallback(async () => {
     if (!currentNetwork || devices.length === 0) return;
@@ -123,6 +192,16 @@ export default function ScanScreen() {
     return 'safe';
   };
 
+  const blockAction = blockReason 
+    ? getBlockReasonAction(
+        blockReason, 
+        handleRequestPermission, 
+        handleOpenSettings, 
+        handleEnableLocation,
+        handleRetry
+      )
+    : null;
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <NetworkStatusBar
@@ -134,29 +213,75 @@ export default function ScanScreen() {
         onPress={() => setShowNetworkSheet(true)}
       />
 
-      {(threatCount > 0 || cameraCount > 0) && !isScanning && (
+      {(threatCount > 0 || cameraCount > 0) && !blockReason && (
         <ThreatAlert threatCount={threatCount} cameraCount={cameraCount} />
       )}
 
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: spacing.xl }}>
-        <FAB
-          size="xl"
-          onPress={handleScan}
-          loading={isScanning}
-          disabled={!currentNetwork}
-          icon={<Radio size={52} color="#fff" />}
-          label={isScanning ? `Scanning... ${Math.round(scanProgress)}%` : 'Scan Network'}
-          sublabel={!currentNetwork ? 'Connect to WiFi first' : deviceCount > 0 ? `${deviceCount} devices found` : 'Tap to detect devices'}
-        />
+        {blockReason ? (
+          <View style={{ alignItems: 'center', gap: spacing.lg }}>
+            <View style={{
+              width: 80,
+              height: 80,
+              borderRadius: 40,
+              backgroundColor: colors.elevated,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              {getBlockReasonIcon(blockReason)}
+            </View>
+            
+            <View style={{ alignItems: 'center', gap: spacing.sm }}>
+              <Text style={{ color: colors.text.primary, fontSize: 18, fontWeight: '600', textAlign: 'center' }}>
+                {blockReason === 'not_connected' ? 'Not Connected to WiFi' : 
+                 blockReason === 'no_permission' ? 'Permission Required' :
+                 blockReason === 'permission_denied_permanent' ? 'Permission Denied' :
+                 blockReason === 'location_disabled' ? 'Location Disabled' :
+                 'Unable to Scan'}
+              </Text>
+              <Text style={{ color: colors.text.secondary, fontSize: 14, textAlign: 'center', maxWidth: 280 }}>
+                {blockMessage}
+              </Text>
+            </View>
 
-        {lastScanTime && !isScanning && (
-          <Text style={{ color: colors.text.tertiary, fontSize: 12, marginTop: spacing.lg }}>
-            Last scan: {new Date(lastScanTime).toLocaleTimeString()}
-          </Text>
+            {blockAction && (
+              <Button
+                variant="primary"
+                onPress={blockAction.onPress}
+                style={{ minWidth: 160 }}
+              >
+                {blockAction.label}
+              </Button>
+            )}
+
+            {blockReason === 'permission_denied_permanent' && (
+              <Text style={{ color: colors.text.tertiary, fontSize: 12, textAlign: 'center', marginTop: spacing.sm }}>
+                Go to: Settings {'>'} Apps {'>'} CamDetect {'>'} Permissions
+              </Text>
+            )}
+          </View>
+        ) : (
+          <>
+            <FAB
+              size="xl"
+              onPress={handleScan}
+              loading={false}
+              disabled={!canScan}
+              icon={<Radio size={52} color="#fff" />}
+              label={'Scan Network'}
+              sublabel={!currentNetwork ? 'Checking connection...' : deviceCount > 0 ? `${deviceCount} devices found` : 'Tap to detect devices'}
+            />
+
+            {lastScanTime && (
+              <Text style={{ color: colors.text.tertiary, fontSize: 12, marginTop: spacing.lg }}>
+                Last scan: {new Date(lastScanTime).toLocaleTimeString()}
+              </Text>
+            )}
+          </>
         )}
       </View>
 
-      {deviceCount > 0 && !isScanning && (
+      {deviceCount > 0 && !blockReason && (
         <View style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.lg }}>
           <View style={{ flexDirection: 'row', gap: spacing.sm }}>
             <View style={{ flex: 1, backgroundColor: colors.elevated, padding: spacing.md, borderRadius: borderRadius.lg, alignItems: 'center' }}>
@@ -180,7 +305,7 @@ export default function ScanScreen() {
         onClose={() => setShowNetworkSheet(false)}
         title="Network Details"
       >
-        {currentNetwork && (
+        {currentNetwork ? (
           <View style={{ gap: spacing.md }}>
             <View style={{ backgroundColor: colors.elevated, padding: spacing.md, borderRadius: borderRadius.lg }}>
               <Text style={{ color: colors.text.tertiary, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Network Name</Text>
@@ -235,6 +360,12 @@ export default function ScanScreen() {
                 Report This Network
               </Button>
             )}
+          </View>
+        ) : (
+          <View style={{ alignItems: 'center', paddingVertical: spacing.xl }}>
+            <Text style={{ color: colors.text.secondary, textAlign: 'center' }}>
+              Not connected to a WiFi network
+            </Text>
           </View>
         )}
       </BottomSheet>
