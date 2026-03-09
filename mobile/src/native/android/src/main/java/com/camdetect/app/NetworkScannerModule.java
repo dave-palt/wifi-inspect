@@ -45,6 +45,16 @@ public class NetworkScannerModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void getNetworkInfo(Promise promise) {
         try {
+            Network activeNetwork = connectivityManager.getActiveNetwork();
+            NetworkCapabilities caps = connectivityManager.getNetworkCapabilities(activeNetwork);
+            
+            boolean isWifi = caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI);
+            
+            if (!isWifi) {
+                promise.resolve(null);
+                return;
+            }
+            
             WritableMap networkInfo = Arguments.createMap();
             
             WifiInfo wifiInfo = wifiManager.getConnectionInfo();
@@ -61,16 +71,25 @@ public class NetworkScannerModule extends ReactContextBaseJavaModule {
                 if (ssid != null && ssid.startsWith("\"") && ssid.endsWith("\"")) {
                     ssid = ssid.substring(1, ssid.length() - 1);
                 }
+                
+                if (ssid == null || ssid.equals("<unknown ssid>")) {
+                    ssid = "Connected WiFi";
+                }
             }
             
             String deviceIp = NetworkUtils.getDeviceIpAddress();
             int gateway = NetworkUtils.getGatewayAddress(reactContext);
             int subnet = NetworkUtils.getSubnetMask(reactContext);
             
-            networkInfo.putString("ssid", ssid != null ? ssid : "Unknown Network");
+            if (deviceIp == null || deviceIp.equals("0.0.0.0")) {
+                promise.resolve(null);
+                return;
+            }
+            
+            networkInfo.putString("ssid", ssid != null ? ssid : "Connected WiFi");
             networkInfo.putString("bssid", bssid != null ? bssid : "");
-            networkInfo.putString("ip", deviceIp != null ? deviceIp : "0.0.0.0");
-            networkInfo.putString("deviceIp", deviceIp != null ? deviceIp : "0.0.0.0");
+            networkInfo.putString("ip", deviceIp);
+            networkInfo.putString("deviceIp", deviceIp);
             networkInfo.putInt("gateway", gateway);
             networkInfo.putInt("subnet", subnet);
             networkInfo.putInt("rssi", rssi);

@@ -35,12 +35,12 @@ export async function getNetworkInfo(): Promise<NetworkInfo | null> {
   try {
     const info = await NetworkScanner.getNetworkInfo();
     
-    if (!info.ssid && !info.deviceIp) {
+    if (!info || !info.deviceIp || info.deviceIp === '0.0.0.0') {
       return null;
     }
 
     return {
-      ssid: info.ssid || 'Unknown Network',
+      ssid: info.ssid || 'Connected WiFi',
       bssid: info.bssid || '',
       ip: info.deviceIp || info.ip || '0.0.0.0',
       gateway: intToIp(info.gateway || 0),
