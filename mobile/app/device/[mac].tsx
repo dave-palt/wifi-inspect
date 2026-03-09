@@ -6,17 +6,30 @@ import { useCallback, useState } from 'react';
 import { Clipboard } from 'react-native';
 import { apiService } from '../../src/services/api';
 import { hashBssid } from '../../src/utils/crypto';
-import { Card } from '../../src/components/Card';
-import { Button } from '../../src/components/Button';
+import { colors, borderRadius, spacing, shadows } from '../../src/utils/design';
 import { Badge } from '../../src/components/Badge';
 import { ThreatMeter } from '../../src/components/ThreatMeter';
+import { Button } from '../../src/components/Button';
+import type { Device } from '@shared/src/types/device';
 
 const getThreatColor = (level?: number): string => {
-  if (!level || level === 0) return '#94a3b8';
-  if (level <= 1) return '#4ade80';
-  if (level <= 2) return '#facc15';
+  if (!level || level === 0) return colors.text.tertiary;
+  if (level <= 1) return colors.success;
+  if (level <= 2) return colors.warning;
   if (level <= 3) return '#fb923c';
-  return '#ef4444';
+  return colors.danger;
+};
+
+const getDeviceIcon = (type?: string) => {
+  const iconProps = { size: 28, color: colors.text.secondary };
+  switch (type) {
+    case 'camera':
+      return <Video {...iconProps} color={colors.danger} />;
+    case 'router':
+      return <RouterIcon {...iconProps} color={colors.primary} />;
+    default:
+      return <Smartphone {...iconProps} />;
+  }
 };
 
 const getServiceIcon = (service?: string) => {
@@ -46,236 +59,249 @@ export default function DeviceDetailScreen() {
   const router = useRouter();
   const { devices, currentNetwork } = useDeviceStore();
   const [isReporting, setIsReporting] = useState(false);
-  
-  const device = devices.find(d => d.mac === mac);
-
-  const handleCopy = useCallback((text: string, label: string) => {
-    Clipboard.setString(text);
-    Alert.alert('Copied', `${label} copied to clipboard`);
-  }, []);
-
-  const handleReport = useCallback(async () => {
-    if (!currentNetwork) {
-      Alert.alert('Error', 'No network information available');
-      return;
-    }
-
-    const confirmed = await new Promise<boolean>((resolve) => {
-      Alert.alert(
-        'Report Suspicious Device',
-        `This will report "${device?.vendor || 'this device'}" as suspicious to help other users. Continue?`,
-        [
-          { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
-          { text: 'Report', style: 'destructive', onPress: () => resolve(true) },
-        ]
-      );
-    });
-
-    if (!confirmed || !device) return;
-
-    setIsReporting(true);
-    try {
-      const bssidHash = hashBssid(currentNetwork.bssid);
-      
-      await apiService.reportNetwork({
-        ssid: currentNetwork.ssid,
-        bssidHash,
-        securityType: currentNetwork.securityType,
-        devicesFound: [{
-          ip: device.ip,
-          mac: device.mac,
-          openPorts: device.openPorts?.map(p => p.number) || [],
-          deviceType: device.deviceType || 'unknown',
-        }],
-        threatLevel: device.threatLevel || 0,
-      });
-
-      Alert.alert('Success', 'Device reported. Thank you for helping keep others safe!');
-    } catch (error) {
-      console.error('Report error:', error);
-      Alert.alert('Error', 'Failed to report device. Please try again.');
-    } finally {
-      setIsReporting(false);
-    }
-  }, [device, currentNetwork]);
-
-  const handleOpenPort = useCallback(async (ip: string, port: number, service?: string) => {
-    const url = getDeepLink(ip, port, service);
-    const canOpen = await Linking.canOpenURL(url);
     
-    if (canOpen) {
-      await Linking.openURL(url);
-    } else {
-      Alert.alert('Cannot Open', `No app available to handle ${service || 'this protocol'}`);
+    const device = devices.find(d => d.mac === mac);
+
+    const handleCopy = useCallback((text: string, label: string) => {
+        Clipboard.setString(text);
+        Alert.alert('Copied', `${label} copied to clipboard`);
+    }, []);
+
+    const handleReport = useCallback(async () => {
+        if (!currentNetwork) {
+            Alert.alert('Error', 'No network information available');
+            return;
+        }
+
+        const confirmed = await new Promise<boolean>((resolve) => {
+            Alert.alert(
+                'Report Suspicious Device',
+                `This will report "${device?.vendor || 'this device'}" as suspicious to help other users. Continue?`,
+                [
+                    { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+                    { text: 'Report', style: 'destructive', onPress: () => resolve(true) },
+                ]
+            );
+        });
+
+        if (!confirmed || !device) return;
+
+        setIsReporting(true);
+        try {
+            const bssidHash = hashBssid(currentNetwork.bssid);
+            
+            await apiService.reportNetwork({
+                ssid: currentNetwork.ssid,
+                bssidHash,
+                securityType: currentNetwork.securityType,
+                devicesFound: [{
+                    ip: device.ip,
+                    mac: device.mac,
+                    openPorts: device.openPorts?.map(p => p.number) || [],
+                    deviceType: device.deviceType || 'unknown',
+                }],
+                threatLevel: device.threatLevel || 0,
+            });
+
+            Alert.alert('Success', 'Device reported. Thank you for helping keep others safe!');
+        } catch (error) {
+            console.error('Report error:', error);
+            Alert.alert('Error', 'Failed to report device. Please try again.');
+        } finally {
+            setIsReporting(false);
+        }
+    }, [device, currentNetwork]);
+
+    const handleOpenPort = useCallback(async (ip: string, port: number, service?: string) => {
+        const url = getDeepLink(ip, port, service);
+        const canOpen = await Linking.canOpenURL(url);
+        
+        if (canOpen) {
+            await Linking.openURL(url);
+        } else {
+            Alert.alert('Cannot Open', `No app available to handle ${service || 'this protocol'}`);
+        }
+    }, []);
+
+    if (!device) {
+        return (
+            <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ color: colors.text.primary, fontSize: 18, fontWeight: '600' }}>Device not found</Text>
+                <TouchableOpacity style={{ marginTop: spacing.md }} onPress={() => router.back()}>
+                    <Text style={{ color: colors.primary }}>Go back</Text>
+                </TouchableOpacity>
+            </View>
+        );
     }
-  }, []);
 
-  if (!device) {
+    const threatLevel = device.threatLevel ?? 0;
+    const isHighThreat = threatLevel >= 3 || device.deviceType === 'camera';
+    const isCamera = device.deviceType === 'camera'
+
     return (
-      <View className="flex-1 bg-slate-950 items-center justify-center">
-        <Text className="text-white text-lg">Device not found</Text>
-        <TouchableOpacity className="mt-4" onPress={() => router.back()}>
-          <Text className="text-blue-400">Go back</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  const threatLevel = device.threatLevel ?? 0;
-  const isCamera = device.deviceType === 'camera';
-
-  return (
-    <>
-      <Stack.Screen options={{ title: device.vendor || 'Device Details' }} />
-      <ScrollView className="flex-1 bg-slate-950">
-        <View className="p-5">
-          <Card className="mb-4">
-            <View className="p-5 flex-row items-center gap-4">
-              <View className={`w-14 h-14 rounded-2xl items-center justify-center ${isCamera ? 'bg-red-900/30' : 'bg-slate-700/50'}`}>
-                {isCamera ? (
-                  <Video size={28} color="#ef4444" />
-                ) : device.deviceType === 'router' ? (
-                  <RouterIcon size={28} color="#3b82f6" />
-                ) : (
-                  <Smartphone size={28} color="#94a3b8" />
-                )}
-              </View>
-              <View className="flex-1">
-                <Text className="text-white text-xl font-semibold">
-                  {device.vendor || 'Unknown Device'}
-                </Text>
-                {device.hostname && (
-                  <Text className="text-slate-400 text-sm">{device.hostname}</Text>
-                )}
-                {isCamera && (
-                  <Badge variant="danger" size="md">Camera Detected</Badge>
-                )}
-              </View>
-            </View>
-          </Card>
-
-          <Card className="mb-4">
-            <View className="p-4">
-              <TouchableOpacity
-                className="flex-row justify-between items-center py-2"
-                onPress={() => handleCopy(device.ip, 'IP address')}
-              >
-                <Text className="text-slate-400">IP Address</Text>
-                <View className="flex-row items-center gap-2">
-                  <Text className="text-white font-medium">{device.ip}</Text>
-                  <Copy size={16} color="#64748b" />
-                </View>
-              </TouchableOpacity>
-              <TouchableOpacity
-                className="flex-row justify-between items-center py-2"
-                onPress={() => handleCopy(device.mac, 'MAC address')}
-              >
-                <Text className="text-slate-400">MAC Address</Text>
-                <View className="flex-row items-center gap-2">
-                  <Text className="text-white font-medium">{device.mac}</Text>
-                  <Copy size={16} color="#64748b" />
-                </View>
-              </TouchableOpacity>
-              {device.signalStrength && (
-                <View className="flex-row justify-between items-center py-2">
-                  <Text className="text-slate-400">Signal Strength</Text>
-                  <Text className="text-white font-medium">{device.signalStrength} dBm</Text>
-                </View>
-              )}
-            </View>
-          </Card>
-
-          {threatLevel > 0 && (
-            <Card className="mb-4">
-              <View className="p-4">
-                <View className="flex-row items-center gap-2 mb-3">
-                  <Shield size={18} color={getThreatColor(threatLevel)} />
-                  <Text className="text-white font-semibold">Security Analysis</Text>
-                </View>
-                <ThreatMeter level={threatLevel} size="lg" />
-                {device.threatReasons && device.threatReasons.length > 0 && (
-                  <View className="mt-4 gap-2">
-                    {device.threatReasons.map((reason, index) => (
-                      <View key={index} className="flex-row items-start gap-2">
-                        <AlertTriangle size={14} color="#f87171" />
-                        <Text className="text-slate-300 flex-1 text-sm">{reason}</Text>
-                      </View>
-                    ))}
-                  </View>
-                )}
-              </View>
-            </Card>
-          )}
-
-          {device.openPorts && device.openPorts.length > 0 && (
-            <Card className="mb-4">
-              <View className="p-4">
-                <View className="flex-row items-center justify-between mb-3">
-                  <Text className="text-white font-semibold">Open Ports</Text>
-                  <Badge>{device.openPorts.length}</Badge>
-                </View>
-                <View className="gap-3">
-                  {device.openPorts.map((port) => (
-                    <View key={port.number} className="bg-slate-900 rounded-xl p-3">
-                      <View className="flex-row items-center justify-between mb-2">
-                        <View className="flex-row items-center gap-2">
-                          <Text className="text-lg">{getServiceIcon(port.service)}</Text>
-                          <View>
-                            <Text className="text-white font-medium">{port.service || 'Unknown'}</Text>
-                            <Text className="text-slate-500 text-xs">Port {port.number}</Text>
-                          </View>
+        <>
+            <Stack.Screen options={{ title: device.vendor || 'Device Details' }} />
+            <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ padding: spacing.md, paddingBottom: 100 }}>
+                {isHighThreat && (
+                    <View style={{
+                        backgroundColor: `${colors.danger}15`,
+                        borderWidth: 1,
+                        borderColor: `${colors.danger}40`,
+                        borderRadius: borderRadius.lg,
+                        padding: spacing.md,
+                        marginBottom: spacing.md,
+                    }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                            <Shield size={24} color={colors.danger} />
+                            <View style={{ flex: 1 }}>
+                                <Text style={{ color: colors.danger, fontSize: 20, fontWeight: '700' }}>
+                                    {isCamera ? 'Camera Detected' : 'High Threat Device'}
+                                </Text>
+                                <Text style={{ color: colors.text.secondary, fontSize: 14 }}>
+                                    {threatLevel >= 4 ? 'Critical risk - review immediately' : threatLevel >= 3 ? 'Immediate attention recommended' : 'Review recommended'}
+                                </Text>
+                            </View>
                         </View>
-                        <Button
-                          size="sm"
-                          icon={<ExternalLink size={14} color="#fff" />}
-                          onPress={() => handleOpenPort(device.ip, port.number, port.service)}
-                        >
-                          Open
-                        </Button>
-                      </View>
-                      <Text className="text-slate-400 text-sm">{port.description}</Text>
                     </View>
-                  ))}
+                )}
+
+                <View style={{ backgroundColor: colors.elevated, borderRadius: borderRadius.lg, padding: spacing.md, marginBottom: spacing.md }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+                        <View style={{
+                            width: 56,
+                            height: 56,
+                            borderRadius: borderRadius.lg,
+                            backgroundColor: isHighThreat ? `${colors.danger}20` : device.deviceType === 'router' ? `${colors.primary}20` : colors.border.subtle,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                        }}>
+                            {getDeviceIcon(device.deviceType)}
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={{ color: colors.text.primary, fontSize: 20, fontWeight: '600' }} numberOfLines={1}>
+                                {device.vendor || 'Unknown Device'}
+                            </Text>
+                            {device.hostname && (
+                                <Text style={{ color: colors.text.secondary, fontSize: 14 }}>{device.hostname}</Text>
+                            )}
+                        </View>
+                    </View>
                 </View>
-              </View>
-            </Card>
-          )}
 
-          <Card className="mb-4">
-            <View className="p-4">
-              <Text className="text-white font-semibold mb-3">Quick Actions</Text>
-              <View className="flex-row gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="flex-1"
-                  onPress={() => handleCopy(device.ip, 'IP address')}
-                >
-                  Copy IP
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="flex-1"
-                  onPress={() => handleCopy(device.mac, 'MAC address')}
-                >
-                  Copy MAC
-                </Button>
-              </View>
-            </View>
-          </Card>
+                <View style={{ backgroundColor: colors.elevated, borderRadius: borderRadius.lg, padding: spacing.md, marginBottom: spacing.md }}>
+                    <Text style={{ color: colors.text.tertiary, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Network Info</Text>
+                    <View style={{ flexDirection: 'row', gap: spacing.md }}>
+                        <View style={{ flex: 1 }}>
+                            <Text style={{ color: colors.text.tertiary, fontSize: 12 }}>IP Address</Text>
+                            <TouchableOpacity 
+                                style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                                onPress={() => handleCopy(device.ip, 'IP address')}
+                            >
+                                <Text style={{ color: colors.text.primary }}>{device.ip}</Text>
+                                <Copy size={14} color={colors.text.tertiary} />
+                            </TouchableOpacity>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={{ color: colors.text.tertiary, fontSize: 12 }}>MAC Address</Text>
+                            <TouchableOpacity 
+                                style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                                onPress={() => handleCopy(device.mac, 'MAC address')}
+                            >
+                                <Text style={{ color: colors.text.primary, fontSize: 12 }}>{device.mac.substring(0, 8)}...{device.mac.substring(8)}</Text>
+                                <Copy size={14} color={colors.text.tertiary} />
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
 
-          <Button
-            variant="danger"
-            fullWidth
-            loading={isReporting}
-            onPress={handleReport}
-            icon={<AlertTriangle size={18} color="#fff" />}
-          >
-            Report Suspicious Device
-          </Button>
-        </View>
-      </ScrollView>
-    </>
-  );
+                {device.signalStrength && (
+                    <View style={{ backgroundColor: colors.elevated, borderRadius: borderRadius.lg, padding: spacing.md, marginBottom: spacing.md }}>
+                        <Text style={{ color: colors.text.tertiary, fontSize: 12 }}>Signal Strength</Text>
+                        <Text style={{ color: colors.text.primary }}>{device.signalStrength} dBm</Text>
+                    </View>
+                )}
+
+                <View style={{ backgroundColor: colors.elevated, borderRadius: borderRadius.lg, padding: spacing.md, marginBottom: spacing.md }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                        <Shield size={18} color={getThreatColor(threatLevel)} />
+                        <Text style={{ color: colors.text.primary, fontSize: 16, fontWeight: '600' }}>Security Analysis</Text>
+                    </View>
+                    <ThreatMeter level={threatLevel} size="lg" />
+                    {device.threatReasons && device.threatReasons.length > 0 && (
+                        <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
+                            {device.threatReasons.map((reason, index) => (
+                                <View key={index} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
+                                    <AlertTriangle size={14} color={colors.danger} />
+                                    <Text style={{ color: colors.text.secondary, flex: 1, fontSize: 13 }}>{reason}</Text>
+                                </View>
+                            ))}
+                        </View>
+                    )}
+                </View>
+
+                {device.openPorts && device.openPorts.length > 0 && (
+                    <View style={{ backgroundColor: colors.elevated, borderRadius: borderRadius.lg, padding: spacing.md, marginBottom: spacing.md }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <Text style={{ color: colors.text.primary, fontSize: 16, fontWeight: '600' }}>Open Ports</Text>
+                            <Badge>{device.openPorts.length}</Badge>
+                        </View>
+                        <View style={{ gap: spacing.sm }}>
+                            {device.openPorts.map((port) => (
+                                <TouchableOpacity
+                                    key={port.number}
+                                    style={{
+                                        backgroundColor: colors.background,
+                                        borderRadius: borderRadius.md,
+                                        padding: spacing.md,
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                    }}
+                                    onPress={() => handleOpenPort(device.ip, port.number, port.service)}
+                                    activeOpacity={1.7}
+                                >
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                                        <Text style={{ fontSize: 18 }}>{getServiceIcon(port.service)}</Text>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={{ color: colors.text.primary, fontWeight: '500' }}>{port.service || 'Unknown'}</Text>
+                                            <Text style={{ color: colors.text.tertiary, fontSize: 12 }}>Port {port.number}</Text>
+                                        </View>
+                                    </View>
+                                    <Button
+                                        size="sm"
+                                        icon={<ExternalLink size={14} color="#fff" />}
+                                        onPress={() => handleOpenPort(device.ip, port.number, port.service)}
+                                    >
+                                        Open
+                                    </Button>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </View>
+                )}
+
+                <View style={{
+                    position: 'absolute',
+                    bottom: 0,
+                    left: 0,
+                    right: 1,
+                    backgroundColor: colors.surface,
+                    borderTopWidth: 1,
+                    borderTopColor: colors.border.subtle,
+                    paddingHorizontal: spacing.md,
+                    paddingBottom: spacing.lg,
+                }}>
+                    <Button
+                        variant="danger"
+                        fullWidth
+                        loading={isReporting}
+                        onPress={handleReport}
+                        icon={<AlertTriangle size={18} color="#fff" />}
+                    >
+                        Report Suspicious Device
+                    </Button>
+                </View>
+            </ScrollView>
+        </>
+    );
 }

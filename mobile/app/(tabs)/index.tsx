@@ -1,24 +1,27 @@
 import { useState, useCallback, useEffect } from 'react';
 import { View, Text, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Wifi, Shield, AlertTriangle, Radio, Smartphone, Bell } from 'lucide-react-native';
+import { Radio, Shield, AlertTriangle } from 'lucide-react-native';
 import { useNetworkScan } from '../../src/hooks/useNetworkScan';
 import { useDeviceStore } from '../../src/stores/scanStore';
 import { useAlertsStore } from '../../src/stores/alertsStore';
 import { apiService } from '../../src/services/api';
 import { hashBssid } from '../../src/utils/crypto';
+import { colors, spacing, borderRadius } from '../../src/utils/design';
+import { FAB } from '../../src/components/FAB';
+import { NetworkStatusBar } from '../../src/components/NetworkStatusBar';
+import { ThreatAlert } from '../../src/components/ThreatAlert';
+import { BottomSheet } from '../../src/components/BottomSheet';
 import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
 import { Badge } from '../../src/components/Badge';
-import { StatCard } from '../../src/components/StatCard';
-import { ListItem } from '../../src/components/ListItem';
-import { AlertBanner } from '../../src/components/AlertBanner';
 
 export default function ScanScreen() {
   const router = useRouter();
   const [isScanning, setIsScanning] = useState(false);
   const [isCheckingNetwork, setIsCheckingNetwork] = useState(false);
   const [isReporting, setIsReporting] = useState(false);
+  const [showNetworkSheet, setShowNetworkSheet] = useState(false);
   const { startScan, scanProgress, currentNetwork } = useNetworkScan();
   const { devices, lastScanTime } = useDeviceStore();
   const { networkAlerts, networkReputation, totalReports, setNetworkAlerts, setNetworkReputation, setTotalReports, setIsLoading } = useAlertsStore();
@@ -113,200 +116,128 @@ export default function ScanScreen() {
   const cameraCount = devices.filter(d => d.deviceType === 'camera').length;
   const threatCount = devices.filter(d => (d.threatLevel ?? 0) >= 3).length;
 
-  const hasAlerts = networkAlerts.length > 0;
-  const isHighRisk = networkReputation < 0.5 || threatCount > 0;
-
-  const getReputationBadge = () => {
-    if (hasAlerts) return { variant: 'danger' as const, label: 'Has Alerts' };
-    if (networkReputation < 0.8) return { variant: 'warning' as const, label: 'Unknown' };
-    return { variant: 'success' as const, label: 'Safe' };
+  const getReputationStatus = (): 'safe' | 'unknown' | 'warning' | 'danger' => {
+    if (networkAlerts.length > 0) return 'danger';
+    if (networkReputation < 0.5) return 'warning';
+    if (networkReputation < 0.8) return 'unknown';
+    return 'safe';
   };
 
-  const reputationBadge = getReputationBadge();
-
   return (
-    <ScrollView className="flex-1 bg-slate-950">
-      <View className="px-5 py-6">
-        <Text className="text-3xl font-bold text-white mb-1">Network Scan</Text>
-        <Text className="text-slate-400 text-base">Detect hidden cameras and threats</Text>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <NetworkStatusBar
+        ssid={currentNetwork?.ssid || 'Unknown Network'}
+        isConnected={!!currentNetwork}
+        isChecking={isCheckingNetwork}
+        reputation={getReputationStatus()}
+        alertCount={networkAlerts.length}
+        onPress={() => setShowNetworkSheet(true)}
+      />
+
+      {(threatCount > 0 || cameraCount > 0) && !isScanning && (
+        <ThreatAlert threatCount={threatCount} cameraCount={cameraCount} />
+      )}
+
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: spacing.xl }}>
+        <FAB
+          size="xl"
+          onPress={handleScan}
+          loading={isScanning}
+          disabled={!currentNetwork}
+          icon={<Radio size={52} color="#fff" />}
+          label={isScanning ? `Scanning... ${Math.round(scanProgress)}%` : 'Scan Network'}
+          sublabel={!currentNetwork ? 'Connect to WiFi first' : deviceCount > 0 ? `${deviceCount} devices found` : 'Tap to detect devices'}
+        />
+
+        {lastScanTime && !isScanning && (
+          <Text style={{ color: colors.text.tertiary, fontSize: 12, marginTop: spacing.lg }}>
+            Last scan: {new Date(lastScanTime).toLocaleTimeString()}
+          </Text>
+        )}
       </View>
 
-      {currentNetwork ? (
-        <View className="px-5 mb-5">
-          <Card className="overflow-hidden">
-            <View className="bg-gradient-to-r from-blue-600/20 to-purple-600/20 p-5">
-              <View className="flex-row items-center justify-between mb-3">
-                <View className="flex-row items-center gap-3">
-                  <View className="w-10 h-10 rounded-full bg-blue-500/20 items-center justify-center">
-                    <Wifi size={20} color="#3b82f6" />
-                  </View>
-                  <View>
-                    <Text className="text-slate-400 text-xs uppercase tracking-wider">Connected to</Text>
-                    <Text className="text-white text-lg font-semibold">{currentNetwork.ssid}</Text>
-                  </View>
-                </View>
-                {isCheckingNetwork && <ActivityIndicator size="small" color="#3b82f6" />}
-              </View>
-              
-              <View className="flex-row gap-6">
-                <View>
-                  <Text className="text-slate-500 text-xs">IP Address</Text>
-                  <Text className="text-white font-medium">{currentNetwork.ip}</Text>
-                </View>
-                <View>
-                  <Text className="text-slate-500 text-xs">Gateway</Text>
-                  <Text className="text-white font-medium">{currentNetwork.gateway}</Text>
-                </View>
-                <View>
-                  <Text className="text-slate-500 text-xs">Signal</Text>
-                  <Text className="text-white font-medium">{currentNetwork.signalStrength} dBm</Text>
-                </View>
-              </View>
+      {deviceCount > 0 && !isScanning && (
+        <View style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.lg }}>
+          <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+            <View style={{ flex: 1, backgroundColor: colors.elevated, padding: spacing.md, borderRadius: borderRadius.lg, alignItems: 'center' }}>
+              <Text style={{ color: colors.text.primary, fontSize: 24, fontWeight: '700' }}>{deviceCount}</Text>
+              <Text style={{ color: colors.text.secondary, fontSize: 12 }}>Devices</Text>
             </View>
-
-            <View className="px-5 py-3 bg-slate-800/50 flex-row items-center justify-between">
-              <Text className="text-slate-400 text-sm">Network Reputation</Text>
-              <View className="flex-row items-center gap-2">
-                <Badge variant={reputationBadge.variant}>{reputationBadge.label}</Badge>
-                {totalReports > 0 && (
-                  <Text className="text-slate-500 text-sm">({totalReports} reports)</Text>
-                )}
-              </View>
+            <View style={{ flex: 1, backgroundColor: cameraCount > 0 ? `${colors.danger}20` : colors.elevated, padding: spacing.md, borderRadius: borderRadius.lg, alignItems: 'center' }}>
+              <Text style={{ color: cameraCount > 0 ? colors.danger : colors.text.primary, fontSize: 24, fontWeight: '700' }}>{cameraCount}</Text>
+              <Text style={{ color: colors.text.secondary, fontSize: 12 }}>Cameras</Text>
             </View>
-          </Card>
-        </View>
-      ) : (
-        <View className="px-5 mb-5">
-          <Card>
-            <View className="p-4 items-center">
-              <Wifi size={32} color="#f59e0b" />
-              <Text className="text-amber-400 font-medium mt-2">Not connected to WiFi</Text>
+            <View style={{ flex: 1, backgroundColor: threatCount > 0 ? `${colors.warning}20` : colors.elevated, padding: spacing.md, borderRadius: borderRadius.lg, alignItems: 'center' }}>
+              <Text style={{ color: threatCount > 0 ? colors.warning : colors.text.primary, fontSize: 24, fontWeight: '700' }}>{threatCount}</Text>
+              <Text style={{ color: colors.text.secondary, fontSize: 12 }}>Threats</Text>
             </View>
-          </Card>
+          </View>
         </View>
       )}
 
-      {hasAlerts && (
-        <View className="px-5 mb-5">
-          <AlertBanner
-            variant="danger"
-            title="Known Risky Network"
-            message={
-              <View>
-                <Text className="text-red-200 text-sm leading-5">
-                  This network has been reported by other users. Proceed with caution.
-                </Text>
+      <BottomSheet
+        visible={showNetworkSheet}
+        onClose={() => setShowNetworkSheet(false)}
+        title="Network Details"
+      >
+        {currentNetwork && (
+          <View style={{ gap: spacing.md }}>
+            <View style={{ backgroundColor: colors.elevated, padding: spacing.md, borderRadius: borderRadius.lg }}>
+              <Text style={{ color: colors.text.tertiary, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Network Name</Text>
+              <Text style={{ color: colors.text.primary, fontSize: 18, fontWeight: '600' }}>{currentNetwork.ssid}</Text>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+              <View style={{ flex: 1, backgroundColor: colors.elevated, padding: spacing.md, borderRadius: borderRadius.lg }}>
+                <Text style={{ color: colors.text.tertiary, fontSize: 11, marginBottom: 4 }}>IP Address</Text>
+                <Text style={{ color: colors.text.primary, fontWeight: '500' }}>{currentNetwork.ip}</Text>
+              </View>
+              <View style={{ flex: 1, backgroundColor: colors.elevated, padding: spacing.md, borderRadius: borderRadius.lg }}>
+                <Text style={{ color: colors.text.tertiary, fontSize: 11, marginBottom: 4 }}>Gateway</Text>
+                <Text style={{ color: colors.text.primary, fontWeight: '500' }}>{currentNetwork.gateway}</Text>
+              </View>
+            </View>
+
+            <View style={{ backgroundColor: colors.elevated, padding: spacing.md, borderRadius: borderRadius.lg }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm }}>
+                <Text style={{ color: colors.text.tertiary, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 }}>Reputation</Text>
+                <Badge variant={getReputationStatus() === 'safe' ? 'success' : getReputationStatus() === 'danger' ? 'danger' : 'warning'}>
+                  {getReputationStatus() === 'safe' ? 'Safe' : getReputationStatus() === 'danger' ? 'Risk' : 'Unknown'}
+                </Badge>
+              </View>
+              {totalReports > 0 && (
+                <Text style={{ color: colors.text.tertiary, fontSize: 12 }}>{totalReports} community reports</Text>
+              )}
+            </View>
+
+            {networkAlerts.length > 0 && (
+              <View style={{ backgroundColor: `${colors.danger}15`, padding: spacing.md, borderRadius: borderRadius.lg, borderWidth: 1, borderColor: `${colors.danger}40` }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm }}>
+                  <AlertTriangle size={18} color={colors.danger} />
+                  <Text style={{ color: colors.danger, fontWeight: '600' }}>Alerts</Text>
+                </View>
                 {networkAlerts.map((alert, index) => (
-                  <Text key={index} className="text-red-300 text-sm mt-1">
+                  <Text key={index} style={{ color: colors.text.secondary, fontSize: 13, marginBottom: 4 }}>
                     {'\u2022'} {alert.description}
                   </Text>
                 ))}
               </View>
-            }
-            icon={<AlertTriangle size={24} color="#f87171" />}
-          />
-        </View>
-      )}
+            )}
 
-      <View className="px-5 mb-6">
-        <Button
-          size="lg"
-          fullWidth
-          disabled={isScanning || !currentNetwork}
-          loading={isScanning}
-          onPress={handleScan}
-          icon={<Radio size={20} color="#fff" />}
-        >
-          {isScanning ? `Scanning... ${Math.round(scanProgress)}%` : 'Start Network Scan'}
-        </Button>
-      </View>
-
-      <View className="px-5 mb-6">
-        <View className="flex-row gap-3">
-          <StatCard
-            value={deviceCount}
-            label="Devices"
-            icon={<Smartphone size={18} color="#94a3b8" />}
-          />
-          <StatCard
-            value={cameraCount}
-            label="Cameras"
-            variant="danger"
-            icon={<Shield size={18} color="#f87171" />}
-          />
-          <StatCard
-            value={threatCount}
-            label="Threats"
-            variant="warning"
-            icon={<AlertTriangle size={18} color="#fbbf24" />}
-          />
-        </View>
-      </View>
-
-      {(cameraCount > 0 || threatCount > 0) && lastScanTime && (
-        <View className="px-5 mb-6">
-          <Card className="border-red-900/50 bg-red-950/30">
-            <View className="p-4">
-              <View className="flex-row items-center gap-3 mb-2">
-                <AlertTriangle size={20} color="#ef4444" />
-                <Text className="text-white font-semibold text-lg">
-                  {cameraCount + threatCount} Potential Threat{cameraCount + threatCount > 1 ? 's' : ''} Detected
-                </Text>
-              </View>
-              <Text className="text-slate-400 text-sm mb-4">
-                Help warn other travelers by reporting this network
-              </Text>
+            {(cameraCount > 0 || threatCount > 0) && (
               <Button
                 variant="danger"
                 fullWidth
                 loading={isReporting}
                 onPress={handleReportNetwork}
+                icon={<AlertTriangle size={18} color="#fff" />}
               >
                 Report This Network
               </Button>
-            </View>
-          </Card>
-        </View>
-      )}
-
-      {lastScanTime && (
-        <View className="px-5 mb-6">
-          <Card>
-            <Card.Content className="py-3">
-              <Text className="text-slate-500 text-xs uppercase tracking-wider">Last scan</Text>
-              <Text className="text-white font-medium mt-1">
-                {new Date(lastScanTime).toLocaleString()}
-              </Text>
-            </Card.Content>
-          </Card>
-        </View>
-      )}
-
-      <View className="px-5 mb-8">
-        <Text className="text-white text-lg font-semibold mb-3">Quick Actions</Text>
-        <Card>
-          <ListItem
-            title="View All Devices"
-            subtitle="See detailed device list"
-            icon={<Smartphone size={22} color="#3b82f6" />}
-            onPress={() => router.push('/(tabs)/devices')}
-          />
-          <View className="h-px bg-slate-700/50" />
-          <ListItem
-            title="Network Alerts"
-            subtitle="Check reported networks"
-            icon={<Bell size={22} color="#3b82f6" />}
-            onPress={() => router.push('/(tabs)/alerts')}
-            trailing={
-              hasAlerts ? (
-                <View className="bg-red-500 px-2 py-0.5 rounded-full">
-                  <Text className="text-white text-xs font-bold">{networkAlerts.length}</Text>
-                </View>
-              ) : undefined
-            }
-          />
-        </Card>
-      </View>
-    </ScrollView>
+            )}
+          </View>
+        )}
+      </BottomSheet>
+    </View>
   );
 }
