@@ -1,7 +1,4 @@
 {
   "platforms": ["android"],
-  "name": "network-scanner",
-  "android": {
-    "modules": ["com.camdetect.app.NetworkScannerModule"]
-  }
+  "name": "network-scanner"
 }
