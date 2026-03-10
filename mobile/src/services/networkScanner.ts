@@ -1,4 +1,4 @@
-import { Platform } from 'react-native';
+import { InteractionManager } from 'react-native';
 import NetworkScanner, { 
   isNativeModuleAvailable, 
   getNetworkInfo as nativeGetNetworkInfo,
@@ -11,6 +11,7 @@ import type { Device, NetworkInfo, Port } from '@shared/src/types/device';
 import { getDeviceManufacturer } from './vendorLookup';
 import { classifyDevice } from './deviceClassifier';
 import { analyzeThreatLevel } from './threatAnalyzer';
+import { discoverCameraEndpoints } from './cameraDiscovery';
 
 const TAG = 'NetworkScanner';
 
@@ -111,9 +112,14 @@ export async function getNetworkInfoWithDebug(): Promise<NetworkInfoResult> {
   }
 }
 
-export async function scanNetwork(
-  onProgress?: (progress: number) => void
-): Promise<Device[]> {
+export type ScanCallbacks = {
+  onDeviceFound: (device: Device) => void;
+  onProgress?: (progress: number) => void;
+};
+
+export async function scanNetwork(callbacks: ScanCallbacks): Promise<void> {
+  const { onDeviceFound, onProgress } = callbacks;
+  
   console.log(`[${TAG}] Starting network scan...`);
   onProgress?.(10);
   
@@ -132,7 +138,6 @@ export async function scanNetwork(
   
   const gatewayIp = networkInfo.gateway;
   const subnet = getSubnet(networkInfo.ip);
-  const devices: Device[] = [];
   
   console.log(`[${TAG}] Scanning subnet: ${subnet}.x, Gateway: ${gatewayIp}`);
   
@@ -153,12 +158,24 @@ export async function scanNetwork(
   
   const totalDevices = arpDevices.length;
   let processed = 0;
+  let gatewayFound = false;
   
   for (const arpDevice of arpDevices) {
     const openPorts = await scanDevicePorts(arpDevice.ip);
     
     const vendor = getDeviceManufacturer(arpDevice.mac);
     const deviceType = classifyDevice(arpDevice.mac, vendor, arpDevice.hostname, openPorts);
+    
+    let cameraEndpoints = undefined;
+    const hasRtspPort = openPorts.some(p => p.number === 554 || p.number === 8554);
+    if (deviceType === 'camera' || hasRtspPort) {
+      try {
+        cameraEndpoints = await discoverCameraEndpoints(arpDevice.ip, openPorts);
+      } catch (error) {
+        console.log(`[${TAG}] Camera discovery failed for ${arpDevice.ip}:`, error);
+      }
+    }
+    
     const { threatLevel, reasons } = analyzeThreatLevel(deviceType, openPorts, networkInfo);
     
     const device: Device = {
@@ -173,19 +190,26 @@ export async function scanNetwork(
       isGateway: arpDevice.ip === gatewayIp,
       threatLevel,
       threatReasons: reasons,
+      cameraEndpoints,
     };
     
-    devices.push(device);
+    if (device.isGateway) {
+      gatewayFound = true;
+    }
+    
+    onDeviceFound(device);
     
     processed++;
     onProgress?.(50 + Math.floor((processed / totalDevices) * 40));
+    
+    await yieldToUiThread();
   }
   
-  if (!devices.find(d => d.isGateway)) {
+  if (!gatewayFound) {
     const gatewayPorts = await scanDevicePorts(gatewayIp);
     const { threatLevel, reasons } = analyzeThreatLevel('router', gatewayPorts, networkInfo);
     
-    devices.push({
+    const gatewayDevice: Device = {
       mac: networkInfo.bssid || 'Unknown',
       ip: gatewayIp,
       vendor: 'Gateway/Router',
@@ -196,13 +220,21 @@ export async function scanNetwork(
       isGateway: true,
       threatLevel,
       threatReasons: reasons,
-    });
+    };
+    
+    onDeviceFound(gatewayDevice);
   }
   
-  console.log(`[${TAG}] Scan complete: ${devices.length} devices found`);
+  console.log(`[${TAG}] Scan complete`);
   onProgress?.(100);
-  
-  return devices;
+}
+
+function yieldToUiThread(): Promise<void> {
+  return new Promise((resolve) => {
+    InteractionManager.runAfterInteractions(() => {
+      resolve();
+    });
+  });
 }
 
 async function scanDevicePorts(ip: string): Promise<Port[]> {

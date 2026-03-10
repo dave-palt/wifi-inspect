@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
-import { View, Text, ScrollView, Alert, Linking, TouchableOpacity } from 'react-native';
-import { Video, Router as RouterIcon, Smartphone, Copy, ExternalLink, Shield, AlertTriangle } from 'lucide-react-native';
+import { View, Text, ScrollView, Alert, Linking, TouchableOpacity, Image } from 'react-native';
+import { Video, Router as RouterIcon, Smartphone, Copy, ExternalLink, Shield, AlertTriangle, Play, Lock } from 'lucide-react-native';
 import { useDeviceStore } from '../../src/stores/scanStore';
 import { useCallback, useState } from 'react';
 import { Clipboard } from 'react-native';
@@ -123,6 +123,25 @@ export default function DeviceDetailScreen() {
         }
     }, []);
 
+    const handleViewStream = useCallback(() => {
+        if (!device) return;
+        
+        const rtspPort = device.openPorts?.find(p => p.number === 554 || p.number === 8554)?.number || 554;
+        const rtspPath = device.cameraEndpoints?.rtspPath || '/';
+        const requiresAuth = device.cameraEndpoints?.requiresAuth ? 'true' : 'false';
+        
+        router.push({
+            pathname: '/device/stream',
+            params: {
+                ip: device.ip,
+                port: rtspPort.toString(),
+                path: rtspPath,
+                requiresAuth,
+                vendor: device.vendor || 'Camera',
+            },
+        });
+    }, [device, router]);
+
     if (!device) {
         return (
             <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
@@ -137,6 +156,8 @@ export default function DeviceDetailScreen() {
     const threatLevel = device.threatLevel ?? 0;
     const isHighThreat = threatLevel >= 3 || device.deviceType === 'camera';
     const isCamera = device.deviceType === 'camera'
+    const hasRtspPort = device.openPorts?.some(p => p.number === 554 || p.number === 8554);
+    const canViewStream = isCamera || hasRtspPort;
 
     return (
         <>
@@ -160,8 +181,79 @@ export default function DeviceDetailScreen() {
                                 <Text style={{ color: colors.text.secondary, fontSize: 14 }}>
                                     {threatLevel >= 4 ? 'Critical risk - review immediately' : threatLevel >= 3 ? 'Immediate attention recommended' : 'Review recommended'}
                                 </Text>
-                            </View>
+                    </View>
+                </View>
+
+                {canViewStream && (
+                    <View style={{ backgroundColor: colors.elevated, borderRadius: borderRadius.lg, padding: spacing.md, marginBottom: spacing.md }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md }}>
+                            <Text style={{ color: colors.text.primary, fontSize: 16, fontWeight: '600' }}>Camera Stream</Text>
+                            {device.cameraEndpoints?.requiresAuth && (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                    <Lock size={14} color={colors.warning} />
+                                    <Text style={{ color: colors.warning, fontSize: 12 }}>Auth Required</Text>
+                                </View>
+                            )}
                         </View>
+                        
+                        {device.cameraEndpoints?.snapshotUrl ? (
+                            <TouchableOpacity 
+                                style={{ marginBottom: spacing.md }}
+                                onPress={handleViewStream}
+                            >
+                                <Image
+                                    source={{ uri: device.cameraEndpoints.snapshotUrl }}
+                                    style={{
+                                        width: '100%',
+                                        height: 180,
+                                        borderRadius: borderRadius.md,
+                                        backgroundColor: colors.background,
+                                    }}
+                                    resizeMode="cover"
+                                />
+                                <View style={{
+                                    position: 'absolute',
+                                    top: '50%',
+                                    left: '50%',
+                                    marginTop: -24,
+                                    marginLeft: -24,
+                                    width: 48,
+                                    height: 48,
+                                    borderRadius: 24,
+                                    backgroundColor: 'rgba(0,0,0,0.6)',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                }}>
+                                    <Play size={24} color="#fff" fill="#fff" />
+                                </View>
+                            </TouchableOpacity>
+                        ) : (
+                            <View style={{
+                                width: '100%',
+                                height: 120,
+                                borderRadius: borderRadius.md,
+                                backgroundColor: colors.background,
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                marginBottom: spacing.md,
+                            }}>
+                                <Video size={40} color={colors.text.tertiary} />
+                                <Text style={{ color: colors.text.tertiary, fontSize: 12, marginTop: spacing.sm }}>
+                                    No preview available
+                                </Text>
+                            </View>
+                        )}
+                        
+                        <Button
+                            variant="primary"
+                            fullWidth
+                            onPress={handleViewStream}
+                            icon={<Play size={18} color="#fff" />}
+                        >
+                            View Live Stream
+                        </Button>
+                    </View>
+                )}
                     </View>
                 )}
 

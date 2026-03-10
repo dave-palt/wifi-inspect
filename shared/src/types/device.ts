@@ -1,3 +1,9 @@
+export interface CameraEndpoints {
+  snapshotUrl?: string;
+  rtspPath?: string;
+  requiresAuth?: boolean;
+}
+
 export interface Device {
   mac: string;
   ip: string;
@@ -11,6 +17,7 @@ export interface Device {
   isGateway?: boolean;
   threatLevel?: ThreatLevel;
   threatReasons?: string[];
+  cameraEndpoints?: CameraEndpoints;
 }
 
 export type DeviceType = 
@@ -31,6 +38,7 @@ export interface Port {
   service?: string;
   state: 'open' | 'closed' | 'filtered';
   banner?: string;
+  requiresAuth?: boolean;
 }
 
 export interface NetworkInfo {

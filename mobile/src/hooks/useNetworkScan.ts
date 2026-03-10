@@ -38,7 +38,7 @@ export function useNetworkScan() {
     isScanning,
     scanProgress,
     setCurrentNetwork,
-    setDevices,
+    addDevice,
     setLastScanTime,
     setIsScanning,
     setScanProgress,
@@ -131,11 +131,15 @@ export function useNetworkScan() {
     clearScan();
 
     try {
-      const discoveredDevices = await scanNetwork((progress) => {
-        setScanProgress(progress);
+      await scanNetwork({
+        onDeviceFound: (device) => {
+          addDevice(device);
+        },
+        onProgress: (progress) => {
+          setScanProgress(progress);
+        },
       });
       
-      setDevices(discoveredDevices);
       setLastScanTime(Date.now());
     } catch (error) {
       console.error('Scan failed:', error);
@@ -144,7 +148,7 @@ export function useNetworkScan() {
       setIsScanning(false);
       setScanProgress(100);
     }
-  }, [isScanning, blockReason, blockMessage, checkNetworkStatus, setIsScanning, setScanProgress, clearScan, setDevices, setLastScanTime]);
+  }, [isScanning, blockReason, blockMessage, checkNetworkStatus, setIsScanning, setScanProgress, clearScan, addDevice, setLastScanTime]);
 
   const retry = useCallback(async () => {
     await permissions.checkPermissions();
