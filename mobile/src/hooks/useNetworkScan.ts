@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useDeviceStore } from '../stores/scanStore';
+import { useSettingsStore } from '../stores/settingsStore';
 import { 
   scanNetwork, 
   getNetworkInfoWithDebug, 
@@ -26,6 +27,7 @@ export interface ScanState {
   lastScanTime: number | null;
   isScanning: boolean;
   scanProgress: number;
+  scanMessage: string;
   blockReason: ScanBlockReason | null;
   blockMessage: string | null;
   networkError: NetworkInfoError | null;
@@ -38,6 +40,7 @@ export function useNetworkScan() {
     lastScanTime,
     isScanning,
     scanProgress,
+    scanMessage,
     setCurrentNetwork,
     addDevice,
     setLastScanTime,
@@ -45,6 +48,8 @@ export function useNetworkScan() {
     setScanProgress,
     clearScan,
   } = useDeviceStore();
+
+  const { customPorts, scanAllSubnets } = useSettingsStore();
 
   const permissions = usePermissions();
   
@@ -150,7 +155,7 @@ export function useNetworkScan() {
 
     perfLogger.log('scan', 'starting');
     setIsScanning(true);
-    setScanProgress(0);
+    setScanProgress(0, 'Starting scan...');
     clearScan();
 
     let deviceCount = 0;
@@ -164,12 +169,12 @@ export function useNetworkScan() {
           perfLogger.log('scan', 'device_found', { ip: device.ip, type: device.deviceType, count: deviceCount });
           addDevice(device);
         },
-        onProgress: (progress) => {
+        onProgress: (progress, message) => {
           progressUpdates++;
-          perfLogger.log('scan', 'progress', { progress, updateCount: progressUpdates });
-          setScanProgress(progress);
+          perfLogger.log('scan', 'progress', { progress, message, updateCount: progressUpdates });
+          setScanProgress(progress, message);
         },
-      });
+      }, { customPorts, scanAllSubnets });
       perfLogger.measure('scanNetwork', 'scanNetwork:start', { deviceCount, progressUpdates });
       
       setLastScanTime(Date.now());
@@ -181,10 +186,10 @@ export function useNetworkScan() {
     } finally {
       perfLogger.log('scan', 'finishing');
       setIsScanning(false);
-      setScanProgress(100);
+      setScanProgress(100, 'Scan complete');
       perfLogger.log('scan', 'finished');
     }
-  }, [isScanning, blockReason, blockMessage, checkNetworkStatus, setIsScanning, setScanProgress, clearScan, addDevice, setLastScanTime]);
+  }, [isScanning, blockReason, blockMessage, checkNetworkStatus, setIsScanning, setScanProgress, clearScan, addDevice, setLastScanTime, customPorts, scanAllSubnets]);
 
   const retry = useCallback(async () => {
     await permissions.checkPermissions();
@@ -207,6 +212,7 @@ export function useNetworkScan() {
     lastScanTime,
     isScanning,
     scanProgress,
+    scanMessage,
     blockReason,
     blockMessage,
     networkError,

@@ -260,4 +260,93 @@ public class NetworkScannerModule extends ReactContextBaseJavaModule {
             promise.reject("PING_ERROR", e.getMessage());
         }
     }
+
+    @ReactMethod
+    public void hasRootBinary(Promise promise) {
+        try {
+            boolean hasRoot = RootUtils.hasRootBinary();
+            Log.d(TAG, "hasRootBinary: " + hasRoot);
+            promise.resolve(hasRoot);
+        } catch (Exception e) {
+            Log.e(TAG, "Error checking root binary: " + e.getMessage());
+            promise.resolve(false);
+        }
+    }
+
+    @ReactMethod
+    public void requestRootAccess(Promise promise) {
+        try {
+            boolean granted = RootUtils.requestRootAccess();
+            Log.d(TAG, "requestRootAccess: " + granted);
+            promise.resolve(granted);
+        } catch (Exception e) {
+            Log.e(TAG, "Error requesting root access: " + e.getMessage());
+            promise.resolve(false);
+        }
+    }
+
+    @ReactMethod
+    public void hasRootPermission(Promise promise) {
+        try {
+            boolean hasPermission = RootUtils.hasRootPermission();
+            Log.d(TAG, "hasRootPermission: " + hasPermission);
+            promise.resolve(hasPermission);
+        } catch (Exception e) {
+            Log.e(TAG, "Error checking root permission: " + e.getMessage());
+            promise.resolve(false);
+        }
+    }
+
+    @ReactMethod
+    public void rootArpScan(String subnet, Promise promise) {
+        Log.d(TAG, "rootArpScan called for subnet: " + subnet);
+        try {
+            if (!RootUtils.hasRootPermission()) {
+                promise.reject("NO_ROOT", "Root permission not available");
+                return;
+            }
+            
+            List<RootScanner.ArpScanResult> results = RootScanner.pingAndArpScan(subnet);
+            WritableArray devices = Arguments.createArray();
+            
+            for (RootScanner.ArpScanResult result : results) {
+                WritableMap device = Arguments.createMap();
+                device.putString("mac", result.macAddress);
+                device.putString("ip", result.ipAddress);
+                devices.pushMap(device);
+            }
+            
+            Log.d(TAG, "Root ARP scan found " + results.size() + " devices");
+            promise.resolve(devices);
+        } catch (Exception e) {
+            Log.e(TAG, "Error in rootArpScan: " + e.getMessage());
+            promise.reject("ROOT_ARP_SCAN_ERROR", e.getMessage());
+        }
+    }
+
+    @ReactMethod
+    public void getAllNetworkInterfaces(Promise promise) {
+        Log.d(TAG, "getAllNetworkInterfaces called");
+        try {
+            List<NetworkUtils.InterfaceInfo> interfaces = NetworkUtils.getAllNetworkInterfaces();
+            WritableArray interfacesArray = Arguments.createArray();
+            
+            for (NetworkUtils.InterfaceInfo info : interfaces) {
+                WritableMap interfaceMap = Arguments.createMap();
+                interfaceMap.putString("name", info.name);
+                interfaceMap.putString("ipAddress", info.ipAddress);
+                interfaceMap.putString("subnet", info.subnet);
+                interfaceMap.putString("subnetMask", info.subnetMask);
+                interfaceMap.putBoolean("isLoopback", info.isLoopback);
+                interfaceMap.putBoolean("isUp", info.isUp);
+                interfacesArray.pushMap(interfaceMap);
+            }
+            
+            Log.d(TAG, "Found " + interfaces.size() + " network interfaces");
+            promise.resolve(interfacesArray);
+        } catch (Exception e) {
+            Log.e(TAG, "Error in getAllNetworkInterfaces: " + e.getMessage());
+            promise.reject("GET_INTERFACES_ERROR", e.getMessage());
+        }
+    }
 }

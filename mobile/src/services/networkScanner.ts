@@ -5,7 +5,9 @@ import NetworkScanner, {
   getArpTable as nativeGetArpTable,
   scanPorts as nativeScanPorts,
   ping as nativePing,
-  type NetworkInfo as NativeNetworkInfoResponse
+  getAllNetworkInterfaces as nativeGetAllInterfaces,
+  type NetworkInfo as NativeNetworkInfoResponse,
+  type InterfaceInfo
 } from 'network-scanner';
 import type { Device, NetworkInfo, Port } from '@shared/src/types/device';
 import { getDeviceManufacturer } from './vendorLookup';
@@ -15,6 +17,18 @@ import { discoverCameraEndpoints } from './cameraDiscovery';
 import { perfLogger } from '../utils/perfLogger';
 
 const TAG = 'NetworkScanner';
+
+const DEFAULT_PORTS: number[] = [
+  21, 22, 23, 25, 53, 80, 110, 123, 143, 161, 443, 445, 514, 993, 995,
+  554, 8554, 37777, 37778,
+  8000, 8001, 8002, 8080, 8081, 8082, 8083, 8084, 8443, 8800, 9000, 9001, 9008, 1024,
+  1433, 1521, 1883, 3306, 3389, 5432, 5800, 5900, 6000, 62078, 6789, 6667,
+  1900, 5000, 5353, 5357,
+];
+
+export function getPortsToScan(customPorts: number[]): number[] {
+  return [...new Set([...DEFAULT_PORTS, ...customPorts])].sort((a, b) => a - b);
+}
 
 export interface NetworkInfoError {
   type: 'permission' | 'not_connected' | 'no_ip' | 'native_unavailable' | 'unknown';
@@ -115,15 +129,21 @@ export async function getNetworkInfoWithDebug(): Promise<NetworkInfoResult> {
 
 export type ScanCallbacks = {
   onDeviceFound: (device: Device) => void;
-  onProgress?: (progress: number) => void;
+  onProgress?: (progress: number, message?: string) => void;
 };
 
-export async function scanNetwork(callbacks: ScanCallbacks): Promise<void> {
+export interface ScanOptions {
+  customPorts?: number[];
+  scanAllSubnets?: boolean;
+}
+
+export async function scanNetwork(callbacks: ScanCallbacks, options?: ScanOptions): Promise<void> {
   const { onDeviceFound, onProgress } = callbacks;
+  const customPorts = options?.customPorts ?? [];
   
   perfLogger.log('scanNetwork', 'start');
   console.log(`[${TAG}] Starting network scan...`);
-  onProgress?.(10);
+  onProgress?.(5, 'Initializing scan...');
   
   perfLogger.mark('getNetworkInfo:start');
   const result = await getNetworkInfoWithDebug();
@@ -139,79 +159,121 @@ export async function scanNetwork(callbacks: ScanCallbacks): Promise<void> {
     throw new Error('Not connected to network');
   }
 
-  onProgress?.(20);
+  onProgress?.(10, 'Getting network info...');
   
   const gatewayIp = networkInfo.gateway;
-  const subnet = getSubnet(networkInfo.ip);
+  const primarySubnet = getSubnet(networkInfo.ip);
   
-  console.log(`[${TAG}] Scanning subnet: ${subnet}.x, Gateway: ${gatewayIp}`);
-  perfLogger.log('scanNetwork', 'subnet_info', { subnet, gateway: gatewayIp });
+  let subnetsToScan: string[] = [primarySubnet];
   
-  onProgress?.(30);
-  
-  let arpDevices: Array<{ mac: string; ip: string; hostname?: string }> = [];
-  
-  perfLogger.mark('arpTable:start');
-  try {
-    arpDevices = await nativeGetArpTable();
-    perfLogger.measure('arpTable', 'arpTable:start', { deviceCount: arpDevices.length });
-    console.log(`[${TAG}] Found ${arpDevices.length} devices via ARP`);
-  } catch (error) {
-    perfLogger.log('scanNetwork', 'arp_failed', { error: String(error) });
-    console.log(`[${TAG}] ARP table not available, using ping sweep`);
-    perfLogger.mark('pingSweep:start');
-    arpDevices = await pingSweep(subnet);
-    perfLogger.measure('pingSweep', 'pingSweep:start', { deviceCount: arpDevices.length });
-    console.log(`[${TAG}] Found ${arpDevices.length} devices via ping sweep`);
+  if (options?.scanAllSubnets) {
+    try {
+      const interfaces = await nativeGetAllInterfaces();
+      const allSubnets = interfaces
+        .filter(iface => !iface.isLoopback && iface.isUp && iface.subnet)
+        .map(iface => iface.subnet);
+      
+      subnetsToScan = [...new Set([primarySubnet, ...allSubnets])];
+      console.log(`[${TAG}] Scanning ${subnetsToScan.length} subnets: ${subnetsToScan.join(', ')}`);
+    } catch (error) {
+      console.log(`[${TAG}] Failed to get all interfaces, using primary subnet only: ${error}`);
+    }
   }
   
-  onProgress?.(50);
+  console.log(`[${TAG}] Scanning subnet: ${primarySubnet}.x, Gateway: ${gatewayIp}`);
+  perfLogger.log('scanNetwork', 'subnet_info', { subnets: subnetsToScan, gateway: gatewayIp });
   
-  const totalDevices = arpDevices.length;
+  onProgress?.(15, 'Discovering devices...');
+  
+  const portsToScan = getPortsToScan(customPorts);
+  console.log(`[${TAG}] Scanning ${portsToScan.length} ports (${customPorts.length} custom)`);
+
+  const allDiscoveredIps = new Set<string>();
+  const totalSubnets = subnetsToScan.length;
+  
+  for (let i = 0; i < subnetsToScan.length; i++) {
+    const currentSubnet = subnetsToScan[i];
+    const baseProgress = 15 + Math.floor((i / totalSubnets) * 35);
+    
+    const discoveredIps = await pingSweepWithProgress(currentSubnet, (scanned, total) => {
+      const subnetProgress = Math.floor((scanned / total) * (35 / totalSubnets));
+      onProgress?.(baseProgress + subnetProgress, `Scanning ${currentSubnet}.x... ${scanned}/${total} IPs`);
+    });
+    
+    discoveredIps.forEach(ip => allDiscoveredIps.add(ip));
+  }
+  
+  const discoveredIps = allDiscoveredIps;
+  
+  console.log(`[${TAG}] Ping sweep found ${discoveredIps.size} active IPs across ${subnetsToScan.length} subnets`);
+  onProgress?.(50, `Found ${discoveredIps.size} devices, getting details...`);
+  
+  let arpEntries: Array<{ mac: string; ip: string; hostname?: string }> = [];
+  try {
+    arpEntries = await nativeGetArpTable();
+    console.log(`[${TAG}] ARP table has ${arpEntries.length} entries`);
+  } catch (error) {
+    console.log(`[${TAG}] ARP table read failed: ${error}`);
+  }
+  
+  const devices: Array<{ ip: string; mac: string; hostname?: string }> = [];
+  for (const ip of discoveredIps) {
+    const arpEntry = arpEntries.find(e => e.ip === ip);
+    devices.push({
+      ip,
+      mac: arpEntry?.mac || 'unknown',
+      hostname: arpEntry?.hostname,
+    });
+  }
+  
+  console.log(`[${TAG}] Merged ${devices.length} devices from ping sweep + ARP`);
+  onProgress?.(55, `Processing ${devices.length} devices...`);
+  
+  const totalDevices = devices.length;
   let processed = 0;
   let gatewayFound = false;
   
   perfLogger.log('scanNetwork', 'processing_devices', { total: totalDevices });
   
-  for (const arpDevice of arpDevices) {
-    perfLogger.mark(`device:${arpDevice.ip}:start`);
+  for (const deviceInfo of devices) {
+    perfLogger.mark(`device:${deviceInfo.ip}:start`);
     
-    perfLogger.mark(`portScan:${arpDevice.ip}:start`);
-    const openPorts = await scanDevicePorts(arpDevice.ip);
-    perfLogger.measure(`portScan`, `portScan:${arpDevice.ip}:start`, { ip: arpDevice.ip, openPorts: openPorts.length });
+    perfLogger.mark(`portScan:${deviceInfo.ip}:start`);
+    const openPorts = await scanDevicePorts(deviceInfo.ip, portsToScan);
+    perfLogger.measure(`portScan`, `portScan:${deviceInfo.ip}:start`, { ip: deviceInfo.ip, openPorts: openPorts.length });
     
     perfLogger.mark('classify:start');
-    const vendor = getDeviceManufacturer(arpDevice.mac);
-    const deviceType = classifyDevice(arpDevice.mac, vendor, arpDevice.hostname, openPorts);
-    perfLogger.measure('classify', 'classify:start', { ip: arpDevice.ip, type: deviceType });
+    const vendor = getDeviceManufacturer(deviceInfo.mac);
+    const deviceType = classifyDevice(deviceInfo.mac, vendor, deviceInfo.hostname, openPorts);
+    perfLogger.measure('classify', 'classify:start', { ip: deviceInfo.ip, type: deviceType });
     
     let cameraEndpoints = undefined;
     const hasRtspPort = openPorts.some(p => p.number === 554 || p.number === 8554);
     if (deviceType === 'camera' || hasRtspPort) {
-      perfLogger.mark(`cameraDiscovery:${arpDevice.ip}:start`);
+      perfLogger.mark(`cameraDiscovery:${deviceInfo.ip}:start`);
       try {
-        cameraEndpoints = await discoverCameraEndpoints(arpDevice.ip, openPorts);
-        perfLogger.measure('cameraDiscovery', `cameraDiscovery:${arpDevice.ip}:start`, { ip: arpDevice.ip, found: !!cameraEndpoints });
+        cameraEndpoints = await discoverCameraEndpoints(deviceInfo.ip, openPorts);
+        perfLogger.measure('cameraDiscovery', `cameraDiscovery:${deviceInfo.ip}:start`, { ip: deviceInfo.ip, found: !!cameraEndpoints });
       } catch (error) {
-        perfLogger.log('scanNetwork', 'camera_discovery_failed', { ip: arpDevice.ip, error: String(error) });
-        console.log(`[${TAG}] Camera discovery failed for ${arpDevice.ip}:`, error);
+        perfLogger.log('scanNetwork', 'camera_discovery_failed', { ip: deviceInfo.ip, error: String(error) });
+        console.log(`[${TAG}] Camera discovery failed for ${deviceInfo.ip}:`, error);
       }
     }
     
     perfLogger.mark('threatAnalysis:start');
     const { threatLevel, reasons } = analyzeThreatLevel(deviceType, openPorts, networkInfo);
-    perfLogger.measure('threatAnalysis', 'threatAnalysis:start', { ip: arpDevice.ip, level: threatLevel });
+    perfLogger.measure('threatAnalysis', 'threatAnalysis:start', { ip: deviceInfo.ip, level: threatLevel });
     
     const device: Device = {
-      mac: arpDevice.mac,
-      ip: arpDevice.ip,
-      hostname: arpDevice.hostname,
+      mac: deviceInfo.mac,
+      ip: deviceInfo.ip,
+      hostname: deviceInfo.hostname,
       vendor,
       deviceType,
       firstSeen: Date.now(),
       lastSeen: Date.now(),
       openPorts,
-      isGateway: arpDevice.ip === gatewayIp,
+      isGateway: deviceInfo.ip === gatewayIp,
       threatLevel,
       threatReasons: reasons,
       cameraEndpoints,
@@ -223,22 +285,23 @@ export async function scanNetwork(callbacks: ScanCallbacks): Promise<void> {
     
     perfLogger.mark('onDeviceFound:start');
     onDeviceFound(device);
-    perfLogger.measure('onDeviceFound', 'onDeviceFound:start', { ip: arpDevice.ip });
+    perfLogger.measure('onDeviceFound', 'onDeviceFound:start', { ip: deviceInfo.ip });
     
     processed++;
-    onProgress?.(50 + Math.floor((processed / totalDevices) * 40));
+    const progress = 55 + Math.floor((processed / totalDevices) * 40);
+    onProgress?.(progress, `Scanning device ${processed}/${totalDevices}...`);
     
     perfLogger.mark('yieldToUiThread:start');
     await yieldToUiThread();
     perfLogger.measure('yieldToUiThread', 'yieldToUiThread:start');
     
-    perfLogger.measure('device_processing', `device:${arpDevice.ip}:start`, { ip: arpDevice.ip });
+    perfLogger.measure('device_processing', `device:${deviceInfo.ip}:start`, { ip: deviceInfo.ip });
   }
   
   if (!gatewayFound) {
     perfLogger.log('scanNetwork', 'adding_gateway', { ip: gatewayIp });
     perfLogger.mark('gatewayScan:start');
-    const gatewayPorts = await scanDevicePorts(gatewayIp);
+    const gatewayPorts = await scanDevicePorts(gatewayIp, portsToScan);
     const { threatLevel, reasons } = analyzeThreatLevel('router', gatewayPorts, networkInfo);
     perfLogger.measure('gatewayScan', 'gatewayScan:start');
     
@@ -260,7 +323,7 @@ export async function scanNetwork(callbacks: ScanCallbacks): Promise<void> {
   
   console.log(`[${TAG}] Scan complete`);
   perfLogger.log('scanNetwork', 'complete', { totalDevices, processed });
-  onProgress?.(100);
+  onProgress?.(100, 'Scan complete');
 }
 
 function yieldToUiThread(): Promise<void> {
@@ -273,16 +336,12 @@ function yieldToUiThread(): Promise<void> {
   });
 }
 
-async function scanDevicePorts(ip: string): Promise<Port[]> {
-  const commonPorts = [
-    21, 22, 23, 80, 443, 445, 554, 
-    3306, 3389, 5432, 8000, 8080, 
-    8443, 8554, 9000, 37777
-  ];
+async function scanDevicePorts(ip: string, ports?: number[]): Promise<Port[]> {
+  const portsToScan = ports ?? DEFAULT_PORTS;
   
   try {
     perfLogger.mark(`nativeScanPorts:${ip}:start`);
-    const results = await nativeScanPorts(ip, commonPorts);
+    const results = await nativeScanPorts(ip, portsToScan);
     perfLogger.measure('nativeScanPorts', `nativeScanPorts:${ip}:start`, { ip, resultCount: results.length });
     
     return results
@@ -299,11 +358,15 @@ async function scanDevicePorts(ip: string): Promise<Port[]> {
   }
 }
 
-async function pingSweep(subnet: string): Promise<Array<{ mac: string; ip: string; hostname?: string }>> {
-  const devices: Array<{ mac: string; ip: string; hostname?: string }> = [];
+async function pingSweepWithProgress(
+  subnet: string,
+  onProgress?: (scanned: number, total: number) => void
+): Promise<Set<string>> {
+  const discoveredIps = new Set<string>();
   const range = 254;
   const batchSize = 20;
-  
+  let scanned = 0;
+
   for (let i = 1; i < range; i += batchSize) {
     const promises: Promise<void>[] = [];
     const batch = Math.min(batchSize, range - i);
@@ -316,11 +379,7 @@ async function pingSweep(subnet: string): Promise<Array<{ mac: string; ip: strin
           try {
             const result = await nativePing(ip);
             if (result.success) {
-              devices.push({
-                mac: generateMockMac(),
-                ip,
-                hostname: undefined,
-              });
+              discoveredIps.add(ip);
             }
           } catch {
             // Ignore
@@ -330,9 +389,11 @@ async function pingSweep(subnet: string): Promise<Array<{ mac: string; ip: strin
     }
     
     await Promise.all(promises);
+    scanned += batch;
+    onProgress?.(scanned, range - 1);
   }
   
-  return devices;
+  return discoveredIps;
 }
 
 function intToIp(int: number): string {
@@ -347,17 +408,6 @@ function intToIp(int: number): string {
 function getSubnet(ip: string): string {
   const parts = ip.split('.');
   return `${parts[0]}.${parts[1]}.${parts[2]}`;
-}
-
-function generateMockMac(): string {
-  const hex = '0123456789ABCDEF';
-  let mac = '';
-  for (let i = 0; i < 6; i++) {
-    mac += hex[Math.floor(Math.random() * 16)];
-    mac += hex[Math.floor(Math.random() * 16)];
-    if (i < 5) mac += ':';
-  }
-  return mac;
 }
 
 export async function pingDevice(ip: string): Promise<{ success: boolean; time?: number }> {

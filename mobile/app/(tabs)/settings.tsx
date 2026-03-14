@@ -1,10 +1,15 @@
-import { useState } from 'react';
-import { View, Text, Switch, Alert, TextInput, ScrollView, TouchableOpacity, Modal } from 'react-native';
-import { Server, Scan, Bell, MapPin, Info, FileText, Trash2, ChevronRight, Bug, Share2, Eye } from 'lucide-react-native';
+import { useState, useEffect } from 'react';
+import { View, Text, Switch, Alert, TextInput, ScrollView, TouchableOpacity, Modal, Pressable } from 'react-native';
+import { Server, Scan, Bell, MapPin, Info, FileText, Trash2, ChevronRight, Bug, Share2, Eye, Shield, Wifi, Plus, X } from 'lucide-react-native';
 import { useSettingsStore } from '../../src/stores/settingsStore';
 import { perfLogger } from '../../src/utils/perfLogger';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
+import { 
+  hasRootBinary, 
+  requestRootAccess, 
+  hasRootPermission 
+} from 'network-scanner';
 
 function SectionHeader({ title }: { title: string }) {
   return (
@@ -64,12 +69,77 @@ export default function SettingsScreen() {
     setAutoScanEnabled,
     cameraAlertsEnabled,
     setCameraAlertsEnabled,
+    advancedMode,
+    setAdvancedMode,
+    customPorts,
+    addCustomPort,
+    removeCustomPort,
+    scanAllSubnets,
+    setScanAllSubnets,
   } = useSettingsStore();
 
   const [editingUrl, setEditingUrl] = useState(false);
   const [tempUrl, setTempUrl] = useState(backendUrl);
   const [showLogModal, setShowLogModal] = useState(false);
   const [logSummary, setLogSummary] = useState<ReturnType<typeof perfLogger.getSummary> | null>(null);
+  const [newPortInput, setNewPortInput] = useState('');
+  const [hasRoot, setHasRoot] = useState(false);
+  const [checkingRoot, setCheckingRoot] = useState(false);
+
+  useEffect(() => {
+    checkRootStatus();
+  }, []);
+
+  const checkRootStatus = async () => {
+    try {
+      const rootAvailable = await hasRootBinary();
+      setHasRoot(rootAvailable);
+    } catch {
+      setHasRoot(false);
+    }
+  };
+
+  const handleAdvancedModeToggle = async (enabled: boolean) => {
+    if (!enabled) {
+      setAdvancedMode(false);
+      return;
+    }
+
+    setCheckingRoot(true);
+    try {
+      const granted = await requestRootAccess();
+      if (granted) {
+        setAdvancedMode(true);
+        Alert.alert('Root Access Granted', 'Advanced scanning features are now enabled.');
+      } else {
+        setAdvancedMode(false);
+        Alert.alert('Root Access Denied', 'Root permission was not granted. Advanced features require root access.');
+      }
+    } catch (error) {
+      setAdvancedMode(false);
+      Alert.alert('Error', 'Failed to request root access.');
+    } finally {
+      setCheckingRoot(false);
+    }
+  };
+
+  const handleAddPort = () => {
+    const port = parseInt(newPortInput.trim(), 10);
+    if (isNaN(port) || port < 1 || port > 65535) {
+      Alert.alert('Invalid Port', 'Please enter a valid port number (1-65535).');
+      return;
+    }
+    if (customPorts.includes(port)) {
+      Alert.alert('Duplicate Port', 'This port is already in the list.');
+      return;
+    }
+    addCustomPort(port);
+    setNewPortInput('');
+  };
+
+  const handleRemovePort = (port: number) => {
+    removeCustomPort(port);
+  };
 
   const handleSaveUrl = () => {
     setBackendUrl(tempUrl);
@@ -130,6 +200,33 @@ export default function SettingsScreen() {
       <SectionHeader title="Scanning" />
       <Card className="mx-5">
         <SettingRow
+          icon={<Shield size={20} color={advancedMode ? '#22c55e' : '#64748b'} />}
+          title="Advanced Scanning"
+          subtitle={hasRoot ? "Requires root permission" : "Root not available on this device"}
+        >
+          <Switch
+            value={advancedMode}
+            onValueChange={handleAdvancedModeToggle}
+            trackColor={{ false: '#334155', true: '#22c55e' }}
+            thumbColor="#fff"
+            disabled={!hasRoot || checkingRoot}
+          />
+        </SettingRow>
+        <View className="h-px bg-slate-700/50 mx-5" />
+        <SettingRow
+          icon={<Wifi size={20} color="#3b82f6" />}
+          title="Scan all interfaces"
+          subtitle="Scan all network subnets, not just WiFi"
+        >
+          <Switch
+            value={scanAllSubnets}
+            onValueChange={setScanAllSubnets}
+            trackColor={{ false: '#334155', true: '#3b82f6' }}
+            thumbColor="#fff"
+          />
+        </SettingRow>
+        <View className="h-px bg-slate-700/50 mx-5" />
+        <SettingRow
           icon={<Scan size={20} color="#3b82f6" />}
           title="Auto-scan on connect"
           subtitle="Automatically scan when joining a new network"
@@ -154,6 +251,50 @@ export default function SettingsScreen() {
             thumbColor="#fff"
           />
         </SettingRow>
+      </Card>
+
+      <SectionHeader title="Custom Ports" />
+      <Card className="mx-5">
+        <View className="px-5 py-3">
+          <View className="flex-row items-center gap-2 mb-3">
+            <TextInput
+              className="flex-1 bg-slate-900 text-white rounded-lg px-3 py-2 border border-slate-700 text-sm"
+              value={newPortInput}
+              onChangeText={setNewPortInput}
+              placeholder="Enter port number"
+              placeholderTextColor="#64748b"
+              keyboardType="number-pad"
+              maxLength={5}
+            />
+            <TouchableOpacity
+              className="w-10 h-10 bg-blue-600 rounded-lg items-center justify-center"
+              onPress={handleAddPort}
+            >
+              <Plus size={20} color="#fff" />
+            </TouchableOpacity>
+          </View>
+          
+          {customPorts.length > 0 ? (
+            <View className="flex-row flex-wrap gap-2">
+              {customPorts.map((port) => (
+                <TouchableOpacity
+                  key={port}
+                  className="flex-row items-center bg-slate-700 rounded-full px-3 py-1.5"
+                  onPress={() => handleRemovePort(port)}
+                >
+                  <Text className="text-white text-sm mr-1">{port}</Text>
+                  <X size={14} color="#94a3b8" />
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : (
+            <Text className="text-slate-500 text-sm">No custom ports added. Default ports will be used.</Text>
+          )}
+          
+          <Text className="text-slate-500 text-xs mt-3">
+            Tap a port to remove it. These ports will be scanned in addition to the default camera detection ports.
+          </Text>
+        </View>
       </Card>
 
       <SectionHeader title="Privacy" />

@@ -1,3 +1,0 @@
-import './nativewind';
-
-export {};

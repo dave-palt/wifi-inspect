@@ -32,11 +32,25 @@ export interface PingResult {
   time?: number;
 }
 
+export interface InterfaceInfo {
+  name: string;
+  ipAddress: string;
+  subnet: string;
+  subnetMask: string;
+  isLoopback: boolean;
+  isUp: boolean;
+}
+
 interface NativeNetworkScanner {
   getNetworkInfo(): Promise<NetworkInfo>;
   getArpTable(): Promise<ArpEntry[]>;
   scanPorts(ip: string, ports: number[]): Promise<PortInfo[]>;
   ping(ip: string): Promise<PingResult>;
+  hasRootBinary(): Promise<boolean>;
+  requestRootAccess(): Promise<boolean>;
+  hasRootPermission(): Promise<boolean>;
+  rootArpScan(subnet: string): Promise<ArpEntry[]>;
+  getAllNetworkInterfaces(): Promise<InterfaceInfo[]>;
 }
 
 const NetworkScanner: NativeNetworkScanner = NativeModules.NetworkScanner || {
@@ -44,6 +58,11 @@ const NetworkScanner: NativeNetworkScanner = NativeModules.NetworkScanner || {
   getArpTable: async () => [],
   scanPorts: async () => [],
   ping: async () => ({ success: false }),
+  hasRootBinary: async () => false,
+  requestRootAccess: async () => false,
+  hasRootPermission: async () => false,
+  rootArpScan: async () => [],
+  getAllNetworkInterfaces: async () => [],
 };
 
 export const isNativeModuleAvailable = (): boolean => {
@@ -64,6 +83,26 @@ export const scanPorts = (ip: string, ports: number[]): Promise<PortInfo[]> => {
 
 export const ping = (ip: string): Promise<PingResult> => {
   return NetworkScanner.ping(ip);
+};
+
+export const hasRootBinary = (): Promise<boolean> => {
+  return NetworkScanner.hasRootBinary();
+};
+
+export const requestRootAccess = (): Promise<boolean> => {
+  return NetworkScanner.requestRootAccess();
+};
+
+export const hasRootPermission = (): Promise<boolean> => {
+  return NetworkScanner.hasRootPermission();
+};
+
+export const rootArpScan = (subnet: string): Promise<ArpEntry[]> => {
+  return NetworkScanner.rootArpScan(subnet);
+};
+
+export const getAllNetworkInterfaces = (): Promise<InterfaceInfo[]> => {
+  return NetworkScanner.getAllNetworkInterfaces();
 };
 
 export default NetworkScanner;

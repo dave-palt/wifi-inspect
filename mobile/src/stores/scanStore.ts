@@ -11,6 +11,7 @@ interface ScanState {
   lastScanTime: number | null;
   isScanning: boolean;
   scanProgress: number;
+  scanMessage: string;
   
   setCurrentNetwork: (network: NetworkInfo | null) => void;
   setDevices: (devices: Device[]) => void;
@@ -18,7 +19,7 @@ interface ScanState {
   updateDevice: (mac: string, updates: Partial<Device>) => void;
   setLastScanTime: (time: number) => void;
   setIsScanning: (scanning: boolean) => void;
-  setScanProgress: (progress: number) => void;
+  setScanProgress: (progress: number, message?: string) => void;
   clearScan: () => void;
 }
 
@@ -28,6 +29,7 @@ export const useDeviceStore = create<ScanState>((set, get) => ({
   lastScanTime: null,
   isScanning: false,
   scanProgress: 0,
+  scanMessage: '',
 
   setCurrentNetwork: (network) => {
     perfLogger.log('store', 'setCurrentNetwork', { ssid: network?.ssid });
@@ -75,17 +77,18 @@ export const useDeviceStore = create<ScanState>((set, get) => ({
     set({ isScanning: scanning });
   },
   
-  setScanProgress: (progress) => {
+  setScanProgress: (progress, message) => {
     progressUpdateCount++;
     perfLogger.log('store', 'setScanProgress', { 
       progress, 
+      message,
       updateCount: progressUpdateCount 
     });
-    set({ scanProgress: progress });
+    set({ scanProgress: progress, scanMessage: message ?? '' });
   },
   
   clearScan: () => {
     perfLogger.log('store', 'clearScan');
-    set({ devices: [], lastScanTime: null, scanProgress: 0 });
+    set({ devices: [], lastScanTime: null, scanProgress: 0, scanMessage: '' });
   },
 }));
