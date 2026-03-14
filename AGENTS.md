@@ -19,12 +19,14 @@ When adding new Expo packages, use versions compatible with **Expo SDK 51**:
 | Package | Version |
 |---------|---------|
 | expo | ~51.0.0 |
+| expo-file-system | ~17.0.0 |
 | expo-haptics | ~14.0.0 |
 | expo-router | ~3.5.0 |
 | expo-constants | ~16.0.0 |
 | expo-linking | ~6.3.0 |
 | expo-location | ~17.0.0 |
 | expo-secure-store | ~13.0.0 |
+| expo-sharing | ~12.0.0 |
 | expo-splash-screen | ~0.27.0 |
 | expo-sqlite | ~14.0.0 |
 | expo-status-bar | ~1.12.0 |
