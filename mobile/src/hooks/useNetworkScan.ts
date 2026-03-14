@@ -7,6 +7,7 @@ import {
   NetworkInfoError 
 } from '../services/networkScanner';
 import { usePermissions } from './usePermissions';
+import { perfLogger } from '../utils/perfLogger';
 import type { Device, NetworkInfo } from '@shared/src/types/device';
 
 export type ScanBlockReason = 
@@ -52,37 +53,46 @@ export function useNetworkScan() {
   const [networkError, setNetworkError] = useState<NetworkInfoError | null>(null);
 
   const checkNetworkStatus = useCallback(async () => {
+    perfLogger.startTrace('checkNetworkStatus');
+    
     if (permissions.isChecking) {
       setBlockReason('checking');
       setBlockMessage('Checking permissions...');
+      perfLogger.log('checkNetworkStatus', 'blocked', { reason: 'permissions_checking' });
       return;
     }
 
     if (!isNativeModuleAvailable()) {
       setBlockReason('native_unavailable');
       setBlockMessage('Network scanner not available. Please rebuild the app.');
+      perfLogger.log('checkNetworkStatus', 'blocked', { reason: 'native_unavailable' });
       return;
     }
 
     if (permissions.locationPermission === 'permanently_denied') {
       setBlockReason('permission_denied_permanent');
       setBlockMessage('Location permission denied. Please enable it in Settings.');
+      perfLogger.log('checkNetworkStatus', 'blocked', { reason: 'permission_denied_permanent' });
       return;
     }
 
     if (permissions.locationPermission === 'denied' || permissions.locationPermission === 'can_ask_again') {
       setBlockReason('no_permission');
       setBlockMessage('Location permission is required to detect WiFi networks.');
+      perfLogger.log('checkNetworkStatus', 'blocked', { reason: 'no_permission' });
       return;
     }
 
     if (!permissions.locationServicesEnabled) {
       setBlockReason('location_disabled');
       setBlockMessage('Location services are disabled. Please enable Location (GPS).');
+      perfLogger.log('checkNetworkStatus', 'blocked', { reason: 'location_disabled' });
       return;
     }
 
+    perfLogger.mark('getNetworkInfo:start');
     const result = await getNetworkInfoWithDebug();
+    perfLogger.measure('getNetworkInfo', 'getNetworkInfo:start');
     
     if (result.error) {
       setNetworkError(result.error);
@@ -105,6 +115,7 @@ export function useNetworkScan() {
           setBlockReason('unknown');
       }
       setBlockMessage(result.error.message);
+      perfLogger.endTrace('checkNetworkStatus', { success: false, error: result.error.type });
       return;
     }
 
@@ -115,38 +126,63 @@ export function useNetworkScan() {
     if (result.networkInfo) {
       setCurrentNetwork(result.networkInfo);
     }
+    
+    perfLogger.endTrace('checkNetworkStatus', { success: true, ssid: result.networkInfo?.ssid });
   }, [permissions, setCurrentNetwork]);
 
   const startScan = useCallback(async () => {
-    if (isScanning) return;
+    perfLogger.startTrace('startScan');
+    perfLogger.log('scan', 'initiated');
+    
+    if (isScanning) {
+      perfLogger.log('scan', 'skipped', { reason: 'already_scanning' });
+      return;
+    }
 
+    perfLogger.mark('checkNetworkStatus:before');
     await checkNetworkStatus();
+    perfLogger.measure('checkNetworkStatus', 'checkNetworkStatus:before');
     
     if (blockReason) {
+      perfLogger.endTrace('startScan', { success: false, reason: blockReason });
       throw new Error(blockMessage || 'Cannot scan network');
     }
 
+    perfLogger.log('scan', 'starting');
     setIsScanning(true);
     setScanProgress(0);
     clearScan();
 
+    let deviceCount = 0;
+    let progressUpdates = 0;
+
     try {
+      perfLogger.mark('scanNetwork:start');
       await scanNetwork({
         onDeviceFound: (device) => {
+          deviceCount++;
+          perfLogger.log('scan', 'device_found', { ip: device.ip, type: device.deviceType, count: deviceCount });
           addDevice(device);
         },
         onProgress: (progress) => {
+          progressUpdates++;
+          perfLogger.log('scan', 'progress', { progress, updateCount: progressUpdates });
           setScanProgress(progress);
         },
       });
+      perfLogger.measure('scanNetwork', 'scanNetwork:start', { deviceCount, progressUpdates });
       
       setLastScanTime(Date.now());
+      perfLogger.endTrace('startScan', { success: true, deviceCount });
     } catch (error) {
       console.error('Scan failed:', error);
+      perfLogger.endTrace('startScan', { success: false, error: String(error) });
       throw error;
     } finally {
+      perfLogger.log('scan', 'finishing');
       setIsScanning(false);
       setScanProgress(100);
+      perfLogger.log('scan', 'finished');
     }
   }, [isScanning, blockReason, blockMessage, checkNetworkStatus, setIsScanning, setScanProgress, clearScan, addDevice, setLastScanTime]);
 

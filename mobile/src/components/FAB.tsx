@@ -1,8 +1,6 @@
 import { ReactNode } from 'react';
 import { TouchableOpacity, Text, ActivityIndicator, View, ViewStyle } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { colors, shadows } from '../utils/design';
 
 interface FABProps {
   onPress: () => void;
@@ -42,15 +40,19 @@ export function FAB({
 
   const renderButton = () => (
     <View
+      className={`w-full h-full rounded-full items-center justify-center ${
+        disabled ? 'bg-slate-600' : 'bg-blue-500'
+      }`}
       style={[
         {
           width: diameter,
           height: diameter,
           borderRadius: diameter / 2,
-          backgroundColor: disabled ? colors.border.default : colors.primary,
-          ...shadows.lg,
-          alignItems: 'center',
-          justifyContent: 'center',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.3,
+          shadowRadius: 8,
+          elevation: 8,
         },
         style,
       ]}
@@ -71,29 +73,18 @@ export function FAB({
         onPress={handlePress}
         disabled={disabled || loading}
         activeOpacity={0.85}
-        style={{ alignItems: 'center' }}
+        className="items-center"
       >
         {renderButton()}
         {label && (
-          <Text
-            style={{
-              color: disabled ? colors.text.tertiary : colors.text.primary,
-              fontSize: 18,
-              fontWeight: '600',
-              marginTop: 16,
-            }}
-          >
+          <Text className={`text-lg font-semibold mt-4 ${
+            disabled ? 'text-slate-500' : 'text-white'
+          }`}>
             {label}
           </Text>
         )}
         {sublabel && (
-          <Text
-            style={{
-              color: colors.text.secondary,
-              fontSize: 14,
-              marginTop: 4,
-            }}
-          >
+          <Text className="text-slate-400 text-sm mt-1">
             {sublabel}
           </Text>
         )}

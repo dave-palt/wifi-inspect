@@ -1,32 +1,28 @@
 import { useState, useCallback, useEffect } from 'react';
-import { View, Text, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Radio, Shield, AlertTriangle, MapPin, Settings, RefreshCw } from 'lucide-react-native';
+import { Radio, Shield, AlertTriangle, MapPin } from 'lucide-react-native';
 import { useNetworkScan, ScanBlockReason } from '../../src/hooks/useNetworkScan';
 import { useDeviceStore } from '../../src/stores/scanStore';
 import { useAlertsStore } from '../../src/stores/alertsStore';
 import { apiService } from '../../src/services/api';
 import { hashBssid } from '../../src/utils/crypto';
-import { colors, spacing, borderRadius } from '../../src/utils/design';
 import { FAB } from '../../src/components/FAB';
 import { NetworkStatusBar } from '../../src/components/NetworkStatusBar';
 import { ThreatAlert } from '../../src/components/ThreatAlert';
 import { BottomSheet } from '../../src/components/BottomSheet';
 import { Button } from '../../src/components/Button';
-import { Card } from '../../src/components/Card';
 import { Badge } from '../../src/components/Badge';
 
 function getBlockReasonIcon(reason: ScanBlockReason) {
   switch (reason) {
     case 'no_permission':
     case 'permission_denied_permanent':
-      return <MapPin size={24} color={colors.warning} />;
+      return <MapPin size={24} color="#f59e0b" />;
     case 'location_disabled':
-      return <MapPin size={24} color={colors.warning} />;
-    case 'not_connected':
-      return <Radio size={24} color={colors.text.tertiary} />;
+      return <MapPin size={24} color="#f59e0b" />;
     default:
-      return <AlertTriangle size={24} color={colors.warning} />;
+      return <AlertTriangle size={24} color="#f59e0b" />;
   }
 }
 
@@ -59,7 +55,6 @@ export default function ScanScreen() {
   
   const { 
     startScan, 
-    scanProgress, 
     currentNetwork, 
     blockReason, 
     blockMessage,
@@ -203,7 +198,7 @@ export default function ScanScreen() {
     : null;
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <View className="flex-1 bg-slate-950">
       <NetworkStatusBar
         ssid={currentNetwork?.ssid || 'Unknown Network'}
         isConnected={!!currentNetwork}
@@ -217,29 +212,22 @@ export default function ScanScreen() {
         <ThreatAlert threatCount={threatCount} cameraCount={cameraCount} />
       )}
 
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: spacing.xl }}>
+      <View className="flex-1 justify-center items-center px-8">
         {blockReason ? (
-          <View style={{ alignItems: 'center', gap: spacing.lg }}>
-            <View style={{
-              width: 80,
-              height: 80,
-              borderRadius: 40,
-              backgroundColor: colors.elevated,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}>
+          <View className="items-center gap-6">
+            <View className="w-20 h-20 rounded-full bg-slate-800 items-center justify-center">
               {getBlockReasonIcon(blockReason)}
             </View>
             
-            <View style={{ alignItems: 'center', gap: spacing.sm }}>
-              <Text style={{ color: colors.text.primary, fontSize: 18, fontWeight: '600', textAlign: 'center' }}>
+            <View className="items-center gap-3">
+              <Text className="text-white text-lg font-semibold text-center">
                 {blockReason === 'not_connected' ? 'Not Connected to WiFi' : 
                  blockReason === 'no_permission' ? 'Permission Required' :
                  blockReason === 'permission_denied_permanent' ? 'Permission Denied' :
                  blockReason === 'location_disabled' ? 'Location Disabled' :
                  'Unable to Scan'}
               </Text>
-              <Text style={{ color: colors.text.secondary, fontSize: 14, textAlign: 'center', maxWidth: 280 }}>
+              <Text className="text-slate-400 text-sm text-center max-w-[280px]">
                 {blockMessage}
               </Text>
             </View>
@@ -255,7 +243,7 @@ export default function ScanScreen() {
             )}
 
             {blockReason === 'permission_denied_permanent' && (
-              <Text style={{ color: colors.text.tertiary, fontSize: 12, textAlign: 'center', marginTop: spacing.sm }}>
+              <Text className="text-slate-500 text-xs text-center mt-3">
                 Go to: Settings {'>'} Apps {'>'} CamDetect {'>'} Permissions
               </Text>
             )}
@@ -273,7 +261,7 @@ export default function ScanScreen() {
             />
 
             {lastScanTime && (
-              <Text style={{ color: colors.text.tertiary, fontSize: 12, marginTop: spacing.lg }}>
+              <Text className="text-slate-500 text-xs mt-6">
                 Last scan: {new Date(lastScanTime).toLocaleTimeString()}
               </Text>
             )}
@@ -282,19 +270,19 @@ export default function ScanScreen() {
       </View>
 
       {deviceCount > 0 && !blockReason && (
-        <View style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.lg }}>
-          <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-            <View style={{ flex: 1, backgroundColor: colors.elevated, padding: spacing.md, borderRadius: borderRadius.lg, alignItems: 'center' }}>
-              <Text style={{ color: colors.text.primary, fontSize: 24, fontWeight: '700' }}>{deviceCount}</Text>
-              <Text style={{ color: colors.text.secondary, fontSize: 12 }}>Devices</Text>
+        <View className="px-6 pb-6">
+          <View className="flex-row gap-3">
+            <View className="flex-1 bg-slate-800 p-4 rounded-2xl items-center">
+              <Text className="text-white text-2xl font-bold">{deviceCount}</Text>
+              <Text className="text-slate-400 text-xs">Devices</Text>
             </View>
-            <View style={{ flex: 1, backgroundColor: cameraCount > 0 ? `${colors.danger}20` : colors.elevated, padding: spacing.md, borderRadius: borderRadius.lg, alignItems: 'center' }}>
-              <Text style={{ color: cameraCount > 0 ? colors.danger : colors.text.primary, fontSize: 24, fontWeight: '700' }}>{cameraCount}</Text>
-              <Text style={{ color: colors.text.secondary, fontSize: 12 }}>Cameras</Text>
+            <View className={`flex-1 p-4 rounded-2xl items-center ${cameraCount > 0 ? 'bg-red-500/20' : 'bg-slate-800'}`}>
+              <Text className={`text-2xl font-bold ${cameraCount > 0 ? 'text-red-500' : 'text-white'}`}>{cameraCount}</Text>
+              <Text className="text-slate-400 text-xs">Cameras</Text>
             </View>
-            <View style={{ flex: 1, backgroundColor: threatCount > 0 ? `${colors.warning}20` : colors.elevated, padding: spacing.md, borderRadius: borderRadius.lg, alignItems: 'center' }}>
-              <Text style={{ color: threatCount > 0 ? colors.warning : colors.text.primary, fontSize: 24, fontWeight: '700' }}>{threatCount}</Text>
-              <Text style={{ color: colors.text.secondary, fontSize: 12 }}>Threats</Text>
+            <View className={`flex-1 p-4 rounded-2xl items-center ${threatCount > 0 ? 'bg-amber-500/20' : 'bg-slate-800'}`}>
+              <Text className={`text-2xl font-bold ${threatCount > 0 ? 'text-amber-500' : 'text-white'}`}>{threatCount}</Text>
+              <Text className="text-slate-400 text-xs">Threats</Text>
             </View>
           </View>
         </View>
@@ -306,43 +294,43 @@ export default function ScanScreen() {
         title="Network Details"
       >
         {currentNetwork ? (
-          <View style={{ gap: spacing.md }}>
-            <View style={{ backgroundColor: colors.elevated, padding: spacing.md, borderRadius: borderRadius.lg }}>
-              <Text style={{ color: colors.text.tertiary, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Network Name</Text>
-              <Text style={{ color: colors.text.primary, fontSize: 18, fontWeight: '600' }}>{currentNetwork.ssid}</Text>
+          <View className="gap-4">
+            <View className="bg-slate-800 p-4 rounded-2xl">
+              <Text className="text-slate-500 text-[11px] uppercase tracking-wider mb-1">Network Name</Text>
+              <Text className="text-white text-lg font-semibold">{currentNetwork.ssid}</Text>
             </View>
 
-            <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-              <View style={{ flex: 1, backgroundColor: colors.elevated, padding: spacing.md, borderRadius: borderRadius.lg }}>
-                <Text style={{ color: colors.text.tertiary, fontSize: 11, marginBottom: 4 }}>IP Address</Text>
-                <Text style={{ color: colors.text.primary, fontWeight: '500' }}>{currentNetwork.ip}</Text>
+            <View className="flex-row gap-3">
+              <View className="flex-1 bg-slate-800 p-4 rounded-2xl">
+                <Text className="text-slate-500 text-[11px] mb-1">IP Address</Text>
+                <Text className="text-white font-medium">{currentNetwork.ip}</Text>
               </View>
-              <View style={{ flex: 1, backgroundColor: colors.elevated, padding: spacing.md, borderRadius: borderRadius.lg }}>
-                <Text style={{ color: colors.text.tertiary, fontSize: 11, marginBottom: 4 }}>Gateway</Text>
-                <Text style={{ color: colors.text.primary, fontWeight: '500' }}>{currentNetwork.gateway}</Text>
+              <View className="flex-1 bg-slate-800 p-4 rounded-2xl">
+                <Text className="text-slate-500 text-[11px] mb-1">Gateway</Text>
+                <Text className="text-white font-medium">{currentNetwork.gateway}</Text>
               </View>
             </View>
 
-            <View style={{ backgroundColor: colors.elevated, padding: spacing.md, borderRadius: borderRadius.lg }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm }}>
-                <Text style={{ color: colors.text.tertiary, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 }}>Reputation</Text>
+            <View className="bg-slate-800 p-4 rounded-2xl">
+              <View className="flex-row justify-between items-center mb-3">
+                <Text className="text-slate-500 text-[11px] uppercase tracking-wider">Reputation</Text>
                 <Badge variant={getReputationStatus() === 'safe' ? 'success' : getReputationStatus() === 'danger' ? 'danger' : 'warning'}>
                   {getReputationStatus() === 'safe' ? 'Safe' : getReputationStatus() === 'danger' ? 'Risk' : 'Unknown'}
                 </Badge>
               </View>
               {totalReports > 0 && (
-                <Text style={{ color: colors.text.tertiary, fontSize: 12 }}>{totalReports} community reports</Text>
+                <Text className="text-slate-500 text-xs">{totalReports} community reports</Text>
               )}
             </View>
 
             {networkAlerts.length > 0 && (
-              <View style={{ backgroundColor: `${colors.danger}15`, padding: spacing.md, borderRadius: borderRadius.lg, borderWidth: 1, borderColor: `${colors.danger}40` }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm }}>
-                  <AlertTriangle size={18} color={colors.danger} />
-                  <Text style={{ color: colors.danger, fontWeight: '600' }}>Alerts</Text>
+              <View className="bg-red-500/10 p-4 rounded-2xl border border-red-500/40">
+                <View className="flex-row items-center gap-3 mb-3">
+                  <AlertTriangle size={18} color="#ef4444" />
+                  <Text className="text-red-400 font-semibold">Alerts</Text>
                 </View>
                 {networkAlerts.map((alert, index) => (
-                  <Text key={index} style={{ color: colors.text.secondary, fontSize: 13, marginBottom: 4 }}>
+                  <Text key={index} className="text-slate-400 text-[13px] mb-1">
                     {'\u2022'} {alert.description}
                   </Text>
                 ))}
@@ -362,8 +350,8 @@ export default function ScanScreen() {
             )}
           </View>
         ) : (
-          <View style={{ alignItems: 'center', paddingVertical: spacing.xl }}>
-            <Text style={{ color: colors.text.secondary, textAlign: 'center' }}>
+          <View className="items-center py-8">
+            <Text className="text-slate-400 text-center">
               Not connected to a WiFi network
             </Text>
           </View>

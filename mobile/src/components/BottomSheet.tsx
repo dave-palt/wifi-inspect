@@ -3,7 +3,6 @@ import { View, Text, Modal, Pressable, Dimensions, ScrollView } from 'react-nati
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
-  withTiming,
   withSpring,
   runOnJS,
 } from 'react-native-reanimated';
@@ -12,7 +11,6 @@ import {
   GestureDetector,
 } from 'react-native-gesture-handler';
 import { X } from 'lucide-react-native';
-import { colors, borderRadius, spacing } from '../utils/design';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const MAX_SHEET_HEIGHT = SCREEN_HEIGHT * 0.85;
@@ -69,12 +67,6 @@ export function BottomSheet({
     };
   });
 
-  const backdropStyle = useAnimatedStyle(() => {
-    return {
-      opacity: withTiming(visible ? 1 : 0),
-    };
-  });
-
   if (!visible) return null;
 
   return (
@@ -84,88 +76,40 @@ export function BottomSheet({
       animationType="fade"
       onRequestClose={closeSheet}
     >
-      <View style={{ flex: 1 }}>
+      <View className="flex-1">
         <Pressable
-          style={{
-            flex: 1,
-            backgroundColor: 'rgba(0, 0, 0, 0.6)',
-          }}
+          className="flex-1 bg-black/60"
           onPress={closeSheet}
         />
         
         <GestureDetector gesture={gesture}>
           <Animated.View
-            style={[
-              {
-                position: 'absolute',
-                bottom: 0,
-                left: 0,
-                right: 0,
-                backgroundColor: colors.surface,
-                borderTopLeftRadius: borderRadius.xl,
-                borderTopRightRadius: borderRadius.xl,
-                maxHeight: MAX_SHEET_HEIGHT,
-              },
-              animatedStyle,
-            ]}
+            className="absolute bottom-0 left-0 right-0 bg-slate-900 rounded-t-3xl"
+            style={{ maxHeight: MAX_SHEET_HEIGHT, ...animatedStyle }}
           >
             {showHandle && (
-              <View
-                style={{
-                  width: 36,
-                  height: 5,
-                  backgroundColor: colors.border.default,
-                  borderRadius: borderRadius.full,
-                  alignSelf: 'center',
-                  marginTop: 12,
-                  marginBottom: 8,
-                }}
-              />
+              <View className="w-9 h-[5px] bg-slate-600 rounded-full self-center mt-3 mb-2" />
             )}
 
             {(title || showCloseButton) && (
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  paddingHorizontal: spacing.lg,
-                  paddingVertical: spacing.md,
-                  borderBottomWidth: 1,
-                  borderBottomColor: colors.border.subtle,
-                }}
-              >
-                <Text
-                  style={{
-                    color: colors.text.primary,
-                    fontSize: 18,
-                    fontWeight: '600',
-                    flex: 1,
-                  }}
-                >
+              <View className="flex-row items-center justify-between px-6 py-4 border-b border-slate-800">
+                <Text className="text-white text-lg font-semibold flex-1">
                   {title}
                 </Text>
                 {showCloseButton && (
                   <Pressable
                     onPress={closeSheet}
-                    style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: 16,
-                      backgroundColor: colors.elevated,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
+                    className="w-8 h-8 rounded-full bg-slate-800 items-center justify-center"
                   >
-                    <X size={18} color={colors.text.secondary} />
+                    <X size={18} color="#94a3b8" />
                   </Pressable>
                 )}
               </View>
             )}
 
             <ScrollView
-              style={{ flex: 1 }}
-              contentContainerStyle={{ padding: spacing.lg }}
+              className="flex-1"
+              contentContainerStyle={{ padding: 24 }}
               showsVerticalScrollIndicator={false}
             >
               {children}

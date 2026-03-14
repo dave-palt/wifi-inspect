@@ -2,8 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Linking, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import Video from 'react-native-video';
-import { ArrowLeft, Play, RefreshCw, ExternalLink, Lock, Wifi, AlertTriangle } from 'lucide-react-native';
-import { colors, spacing, borderRadius, shadows } from '../../src/utils/design';
+import { Play, RefreshCw, ExternalLink, Lock, AlertTriangle } from 'lucide-react-native';
 import { Button } from '../../src/components/Button';
 import { buildRtspUrl } from '../../src/services/cameraDiscovery';
 
@@ -112,7 +111,7 @@ export default function StreamScreen() {
     return (
       <Video
         source={{ uri: currentUrl }}
-        style={{ flex: 1, backgroundColor: colors.background }}
+        style={{ flex: 1, backgroundColor: '#0a0a0f' }}
         resizeMode="contain"
         onLoad={handleVideoLoad}
         onError={handleVideoError}
@@ -130,39 +129,22 @@ export default function StreamScreen() {
     }
 
     return (
-      <View style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.8)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: spacing.xl,
-      }}>
+      <View className="absolute top-0 left-0 right-0 bottom-0 bg-black/80 justify-center items-center px-8">
         {status === 'loading' && (
-          <View style={{ alignItems: 'center', gap: spacing.md }}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={{ color: colors.text.primary, fontSize: 16 }}>Connecting to stream...</Text>
-            <Text style={{ color: colors.text.tertiary, fontSize: 12 }}>{ip}:{port}</Text>
+          <View className="items-center gap-4">
+            <ActivityIndicator size="large" color="#3b82f6" />
+            <Text className="text-white text-base">Connecting to stream...</Text>
+            <Text className="text-slate-500 text-xs">{ip}:{port}</Text>
           </View>
         )}
 
         {status === 'error' && (
-          <View style={{ alignItems: 'center', gap: spacing.md }}>
-            <View style={{
-              width: 64,
-              height: 64,
-              borderRadius: 32,
-              backgroundColor: `${colors.danger}20`,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}>
-              <AlertTriangle size={32} color={colors.danger} />
+          <View className="items-center gap-4">
+            <View className="w-16 h-16 rounded-full bg-red-500/20 items-center justify-center">
+              <AlertTriangle size={32} color="#ef4444" />
             </View>
-            <Text style={{ color: colors.text.primary, fontSize: 18, fontWeight: '600' }}>Connection Failed</Text>
-            <Text style={{ color: colors.text.secondary, fontSize: 14, textAlign: 'center' }}>
+            <Text className="text-white text-lg font-semibold">Connection Failed</Text>
+            <Text className="text-slate-400 text-sm text-center">
               {errorMessage || 'Could not connect to the camera stream'}
             </Text>
             <Button variant="primary" onPress={handleRetry} icon={<RefreshCw size={18} color="#fff" />}>
@@ -172,50 +154,31 @@ export default function StreamScreen() {
         )}
 
         {status === 'auth_required' && (
-          <View style={{ width: '100%', maxWidth: 320, gap: spacing.md }}>
-            <View style={{ alignItems: 'center', gap: spacing.sm }}>
-              <View style={{
-                width: 56,
-                height: 56,
-                borderRadius: 28,
-                backgroundColor: `${colors.warning}20`,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}>
-                <Lock size={28} color={colors.warning} />
+          <View className="w-full max-w-[320px] gap-4">
+            <View className="items-center gap-3">
+              <View className="w-14 h-14 rounded-full bg-amber-500/20 items-center justify-center">
+                <Lock size={28} color="#f59e0b" />
               </View>
-              <Text style={{ color: colors.text.primary, fontSize: 18, fontWeight: '600' }}>Authentication Required</Text>
-              <Text style={{ color: colors.text.secondary, fontSize: 14, textAlign: 'center' }}>
+              <Text className="text-white text-lg font-semibold">Authentication Required</Text>
+              <Text className="text-slate-400 text-sm text-center">
                 This camera requires login credentials
               </Text>
             </View>
 
-            <View style={{ gap: spacing.sm }}>
+            <View className="gap-3">
               <TextInput
-                style={{
-                  backgroundColor: colors.elevated,
-                  borderRadius: borderRadius.md,
-                  padding: spacing.md,
-                  color: colors.text.primary,
-                  fontSize: 16,
-                }}
+                className="bg-slate-800 rounded-xl p-4 text-white text-base"
                 placeholder="Username"
-                placeholderTextColor={colors.text.tertiary}
+                placeholderTextColor="#64748b"
                 value={username}
                 onChangeText={setUsername}
                 autoCapitalize="none"
                 autoCorrect={false}
               />
               <TextInput
-                style={{
-                  backgroundColor: colors.elevated,
-                  borderRadius: borderRadius.md,
-                  padding: spacing.md,
-                  color: colors.text.primary,
-                  fontSize: 16,
-                }}
+                className="bg-slate-800 rounded-xl p-4 text-white text-base"
                 placeholder="Password"
-                placeholderTextColor={colors.text.tertiary}
+                placeholderTextColor="#64748b"
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry
@@ -242,40 +205,27 @@ export default function StreamScreen() {
         }} 
       />
       <KeyboardAvoidingView 
-        style={{ flex: 1 }} 
+        className="flex-1" 
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <View style={{ flex: 1, backgroundColor: colors.background }}>
-          <View style={{ flex: 1 }}>
+        <View className="flex-1 bg-slate-950">
+          <View className="flex-1">
             {renderVideoPlayer()}
             {renderOverlay()}
           </View>
 
-          <View style={{
-            backgroundColor: colors.surface,
-            borderTopWidth: 1,
-            borderTopColor: colors.border.subtle,
-            padding: spacing.md,
-            gap: spacing.md,
-          }}>
-            <View style={{ gap: spacing.sm }}>
-              <Text style={{ color: colors.text.tertiary, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 }}>
+          <View className="bg-slate-900 border-t border-slate-800 p-4 gap-4">
+            <View className="gap-3">
+              <Text className="text-slate-500 text-[11px] uppercase tracking-wider">
                 RTSP Path
               </Text>
-              <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+              <View className="flex-row gap-3">
                 <TextInput
-                  style={{
-                    flex: 1,
-                    backgroundColor: colors.elevated,
-                    borderRadius: borderRadius.md,
-                    padding: spacing.md,
-                    color: colors.text.primary,
-                    fontSize: 14,
-                  }}
+                  className="flex-1 bg-slate-800 rounded-xl p-4 text-white text-sm"
                   value={customPath}
                   onChangeText={setCustomPath}
                   placeholder="/stream1"
-                  placeholderTextColor={colors.text.tertiary}
+                  placeholderTextColor="#64748b"
                   autoCapitalize="none"
                   autoCorrect={false}
                 />
@@ -285,12 +235,12 @@ export default function StreamScreen() {
               </View>
             </View>
 
-            <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+            <View className="flex-row gap-3">
               <Button
                 variant="secondary"
                 style={{ flex: 1 }}
                 onPress={handleRetry}
-                icon={<RefreshCw size={16} color={colors.text.primary} />}
+                icon={<RefreshCw size={16} color="#f8fafc" />}
               >
                 Retry
               </Button>
@@ -298,13 +248,13 @@ export default function StreamScreen() {
                 variant="secondary"
                 style={{ flex: 1 }}
                 onPress={handleOpenExternal}
-                icon={<ExternalLink size={16} color={colors.text.primary} />}
+                icon={<ExternalLink size={16} color="#f8fafc" />}
               >
                 Open External
               </Button>
             </View>
 
-            <Text style={{ color: colors.text.tertiary, fontSize: 11, textAlign: 'center' }}>
+            <Text className="text-slate-500 text-xs text-center">
               rtsp://{ip}:{port}{customPath}
             </Text>
           </View>

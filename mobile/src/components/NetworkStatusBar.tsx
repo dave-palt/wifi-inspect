@@ -1,6 +1,5 @@
 import { TouchableOpacity, View, Text, ActivityIndicator } from 'react-native';
 import { Wifi, ChevronUp, Shield, AlertTriangle } from 'lucide-react-native';
-import { colors, borderRadius, spacing } from '../utils/design';
 
 interface NetworkStatusBarProps {
   ssid: string;
@@ -12,10 +11,10 @@ interface NetworkStatusBarProps {
 }
 
 const reputationConfig = {
-  safe: { color: colors.success, label: 'Safe', icon: Shield },
-  unknown: { color: colors.text.tertiary, label: 'Unknown', icon: Wifi },
-  warning: { color: colors.warning, label: 'Caution', icon: AlertTriangle },
-  danger: { color: colors.danger, label: 'Risk Detected', icon: AlertTriangle },
+  safe: { color: '#10b981', label: 'Safe', icon: Shield, tw: 'text-emerald-500 bg-emerald-500' },
+  unknown: { color: '#64748b', label: 'Unknown', icon: Wifi, tw: 'text-slate-500 bg-slate-500' },
+  warning: { color: '#f59e0b', label: 'Caution', icon: AlertTriangle, tw: 'text-amber-500 bg-amber-500' },
+  danger: { color: '#ef4444', label: 'Risk Detected', icon: AlertTriangle, tw: 'text-red-500 bg-red-500' },
 };
 
 export function NetworkStatusBar({
@@ -33,23 +32,10 @@ export function NetworkStatusBar({
     return (
       <TouchableOpacity
         onPress={onPress}
-        style={{
-          backgroundColor: colors.elevated,
-          paddingVertical: spacing.sm,
-          paddingHorizontal: spacing.md,
-          borderRadius: borderRadius.lg,
-          marginHorizontal: spacing.md,
-          marginBottom: spacing.md,
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: spacing.sm,
-        }}
+        className="bg-slate-800 py-3 px-4 rounded-2xl mx-4 mb-4 flex-row items-center justify-center gap-3"
       >
-        <Wifi size={18} color={colors.warning} />
-        <Text style={{ color: colors.warning, fontWeight: '500' }}>
-          Not connected to WiFi
-        </Text>
+        <Wifi size={18} color="#f59e0b" />
+        <Text className="text-amber-500 font-medium">Not connected to WiFi</Text>
       </TouchableOpacity>
     );
   }
@@ -57,53 +43,24 @@ export function NetworkStatusBar({
   return (
     <TouchableOpacity
       onPress={onPress}
-      style={{
-        backgroundColor: colors.elevated,
-        paddingVertical: spacing.sm + 2,
-        paddingHorizontal: spacing.md,
-        borderRadius: borderRadius.lg,
-        marginHorizontal: spacing.md,
-        marginBottom: spacing.md,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.sm,
-      }}
+      className="bg-slate-800 py-3.5 px-4 rounded-2xl mx-4 mb-4 flex-row items-center gap-3"
     >
-      <View
-        style={{
-          width: 32,
-          height: 32,
-          borderRadius: 16,
-          backgroundColor: `${config.color}20`,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
+      <View className={`w-8 h-8 rounded-full items-center justify-center ${config.tw.split(' ')[1]}-20`}>
         <Wifi size={16} color={config.color} />
       </View>
 
-      <View style={{ flex: 1 }}>
-        <Text
-          style={{ color: colors.text.primary, fontWeight: '600', fontSize: 14 }}
-          numberOfLines={1}
-        >
+      <View className="flex-1">
+        <Text className="text-white font-semibold text-sm" numberOfLines={1}>
           {ssid}
         </Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        <View className="flex-row items-center gap-1.5">
           <IconComponent size={12} color={config.color} />
-          <Text style={{ color: config.color, fontSize: 12 }}>
+          <Text className={`text-xs ${config.tw.split(' ')[0]}`}>
             {config.label}
           </Text>
           {alertCount > 0 && (
-            <View
-              style={{
-                backgroundColor: colors.danger,
-                paddingHorizontal: 6,
-                paddingVertical: 1,
-                borderRadius: 8,
-              }}
-            >
-              <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>
+            <View className="bg-red-500 px-1.5 py-0.5 rounded-full">
+              <Text className="text-white text-[10px] font-bold">
                 {alertCount}
               </Text>
             </View>
@@ -112,9 +69,9 @@ export function NetworkStatusBar({
       </View>
 
       {isChecking ? (
-        <ActivityIndicator size="small" color={colors.primary} />
+        <ActivityIndicator size="small" color="#3b82f6" />
       ) : (
-        <ChevronUp size={18} color={colors.text.tertiary} />
+        <ChevronUp size={18} color="#64748b" />
       )}
     </TouchableOpacity>
   );

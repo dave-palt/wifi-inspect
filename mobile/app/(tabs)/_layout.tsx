@@ -1,10 +1,9 @@
 import { Tabs } from 'expo-router';
 import { View } from 'react-native';
 import { Radio, Smartphone, Bell, Settings, Shield } from 'lucide-react-native';
-import { colors } from '../../src/utils/design';
 
 function TabIcon({ name, focused }: { name: string; focused: boolean }) {
-  const color = focused ? colors.primary : colors.text.tertiary;
+  const color = focused ? '#3b82f6' : '#64748b';
   const size = 22;
 
   switch (name) {
@@ -22,26 +21,26 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderTopColor: colors.border.subtle,
+          backgroundColor: '#141419',
+          borderTopColor: '#1e293b',
           borderTopWidth: 1,
           height: 64,
           paddingBottom: 10,
           paddingTop: 8,
         },
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.text.tertiary,
+        tabBarActiveTintColor: '#3b82f6',
+        tabBarInactiveTintColor: '#64748b',
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: '600',
           marginTop: 4,
         },
         headerStyle: { 
-          backgroundColor: colors.surface,
+          backgroundColor: '#141419',
           elevation: 0,
           shadowOpacity: 0,
         },
-        headerTintColor: colors.text.primary,
+        headerTintColor: '#f8fafc',
         headerTitleStyle: { fontWeight: '600' },
         headerShadowVisible: false,
       }}

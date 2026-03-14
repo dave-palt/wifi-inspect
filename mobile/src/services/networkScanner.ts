@@ -12,6 +12,7 @@ import { getDeviceManufacturer } from './vendorLookup';
 import { classifyDevice } from './deviceClassifier';
 import { analyzeThreatLevel } from './threatAnalyzer';
 import { discoverCameraEndpoints } from './cameraDiscovery';
+import { perfLogger } from '../utils/perfLogger';
 
 const TAG = 'NetworkScanner';
 
@@ -120,10 +121,14 @@ export type ScanCallbacks = {
 export async function scanNetwork(callbacks: ScanCallbacks): Promise<void> {
   const { onDeviceFound, onProgress } = callbacks;
   
+  perfLogger.log('scanNetwork', 'start');
   console.log(`[${TAG}] Starting network scan...`);
   onProgress?.(10);
   
+  perfLogger.mark('getNetworkInfo:start');
   const result = await getNetworkInfoWithDebug();
+  perfLogger.measure('getNetworkInfo', 'getNetworkInfo:start');
+  
   if (result.error) {
     console.log(`[${TAG}] Scan failed: ${result.error.message}`);
     throw new Error(result.error.message);
@@ -140,17 +145,23 @@ export async function scanNetwork(callbacks: ScanCallbacks): Promise<void> {
   const subnet = getSubnet(networkInfo.ip);
   
   console.log(`[${TAG}] Scanning subnet: ${subnet}.x, Gateway: ${gatewayIp}`);
+  perfLogger.log('scanNetwork', 'subnet_info', { subnet, gateway: gatewayIp });
   
   onProgress?.(30);
   
   let arpDevices: Array<{ mac: string; ip: string; hostname?: string }> = [];
   
+  perfLogger.mark('arpTable:start');
   try {
     arpDevices = await nativeGetArpTable();
+    perfLogger.measure('arpTable', 'arpTable:start', { deviceCount: arpDevices.length });
     console.log(`[${TAG}] Found ${arpDevices.length} devices via ARP`);
   } catch (error) {
+    perfLogger.log('scanNetwork', 'arp_failed', { error: String(error) });
     console.log(`[${TAG}] ARP table not available, using ping sweep`);
+    perfLogger.mark('pingSweep:start');
     arpDevices = await pingSweep(subnet);
+    perfLogger.measure('pingSweep', 'pingSweep:start', { deviceCount: arpDevices.length });
     console.log(`[${TAG}] Found ${arpDevices.length} devices via ping sweep`);
   }
   
@@ -160,23 +171,36 @@ export async function scanNetwork(callbacks: ScanCallbacks): Promise<void> {
   let processed = 0;
   let gatewayFound = false;
   
+  perfLogger.log('scanNetwork', 'processing_devices', { total: totalDevices });
+  
   for (const arpDevice of arpDevices) {
-    const openPorts = await scanDevicePorts(arpDevice.ip);
+    perfLogger.mark(`device:${arpDevice.ip}:start`);
     
+    perfLogger.mark(`portScan:${arpDevice.ip}:start`);
+    const openPorts = await scanDevicePorts(arpDevice.ip);
+    perfLogger.measure(`portScan`, `portScan:${arpDevice.ip}:start`, { ip: arpDevice.ip, openPorts: openPorts.length });
+    
+    perfLogger.mark('classify:start');
     const vendor = getDeviceManufacturer(arpDevice.mac);
     const deviceType = classifyDevice(arpDevice.mac, vendor, arpDevice.hostname, openPorts);
+    perfLogger.measure('classify', 'classify:start', { ip: arpDevice.ip, type: deviceType });
     
     let cameraEndpoints = undefined;
     const hasRtspPort = openPorts.some(p => p.number === 554 || p.number === 8554);
     if (deviceType === 'camera' || hasRtspPort) {
+      perfLogger.mark(`cameraDiscovery:${arpDevice.ip}:start`);
       try {
         cameraEndpoints = await discoverCameraEndpoints(arpDevice.ip, openPorts);
+        perfLogger.measure('cameraDiscovery', `cameraDiscovery:${arpDevice.ip}:start`, { ip: arpDevice.ip, found: !!cameraEndpoints });
       } catch (error) {
+        perfLogger.log('scanNetwork', 'camera_discovery_failed', { ip: arpDevice.ip, error: String(error) });
         console.log(`[${TAG}] Camera discovery failed for ${arpDevice.ip}:`, error);
       }
     }
     
+    perfLogger.mark('threatAnalysis:start');
     const { threatLevel, reasons } = analyzeThreatLevel(deviceType, openPorts, networkInfo);
+    perfLogger.measure('threatAnalysis', 'threatAnalysis:start', { ip: arpDevice.ip, level: threatLevel });
     
     const device: Device = {
       mac: arpDevice.mac,
@@ -197,17 +221,26 @@ export async function scanNetwork(callbacks: ScanCallbacks): Promise<void> {
       gatewayFound = true;
     }
     
+    perfLogger.mark('onDeviceFound:start');
     onDeviceFound(device);
+    perfLogger.measure('onDeviceFound', 'onDeviceFound:start', { ip: arpDevice.ip });
     
     processed++;
     onProgress?.(50 + Math.floor((processed / totalDevices) * 40));
     
+    perfLogger.mark('yieldToUiThread:start');
     await yieldToUiThread();
+    perfLogger.measure('yieldToUiThread', 'yieldToUiThread:start');
+    
+    perfLogger.measure('device_processing', `device:${arpDevice.ip}:start`, { ip: arpDevice.ip });
   }
   
   if (!gatewayFound) {
+    perfLogger.log('scanNetwork', 'adding_gateway', { ip: gatewayIp });
+    perfLogger.mark('gatewayScan:start');
     const gatewayPorts = await scanDevicePorts(gatewayIp);
     const { threatLevel, reasons } = analyzeThreatLevel('router', gatewayPorts, networkInfo);
+    perfLogger.measure('gatewayScan', 'gatewayScan:start');
     
     const gatewayDevice: Device = {
       mac: networkInfo.bssid || 'Unknown',
@@ -226,12 +259,15 @@ export async function scanNetwork(callbacks: ScanCallbacks): Promise<void> {
   }
   
   console.log(`[${TAG}] Scan complete`);
+  perfLogger.log('scanNetwork', 'complete', { totalDevices, processed });
   onProgress?.(100);
 }
 
 function yieldToUiThread(): Promise<void> {
   return new Promise((resolve) => {
+    perfLogger.mark('InteractionManager:start');
     InteractionManager.runAfterInteractions(() => {
+      perfLogger.measure('InteractionManager', 'InteractionManager:start');
       resolve();
     });
   });
@@ -245,7 +281,10 @@ async function scanDevicePorts(ip: string): Promise<Port[]> {
   ];
   
   try {
+    perfLogger.mark(`nativeScanPorts:${ip}:start`);
     const results = await nativeScanPorts(ip, commonPorts);
+    perfLogger.measure('nativeScanPorts', `nativeScanPorts:${ip}:start`, { ip, resultCount: results.length });
+    
     return results
       .filter((p: { state: string }) => p.state === 'open')
       .map((p: { number: number; protocol: string; service?: string; state: string }) => ({

@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { View, Text, Switch, Alert, TextInput, ScrollView, TouchableOpacity } from 'react-native';
-import { Server, Scan, Bell, MapPin, Info, FileText, Trash2, ChevronRight } from 'lucide-react-native';
+import { View, Text, Switch, Alert, TextInput, ScrollView, TouchableOpacity, Modal } from 'react-native';
+import { Server, Scan, Bell, MapPin, Info, FileText, Trash2, ChevronRight, Bug, Share2, Eye } from 'lucide-react-native';
 import { useSettingsStore } from '../../src/stores/settingsStore';
+import { perfLogger } from '../../src/utils/perfLogger';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 
@@ -67,11 +68,28 @@ export default function SettingsScreen() {
 
   const [editingUrl, setEditingUrl] = useState(false);
   const [tempUrl, setTempUrl] = useState(backendUrl);
+  const [showLogModal, setShowLogModal] = useState(false);
+  const [logSummary, setLogSummary] = useState<ReturnType<typeof perfLogger.getSummary> | null>(null);
 
   const handleSaveUrl = () => {
     setBackendUrl(tempUrl);
     setEditingUrl(false);
     Alert.alert('Saved', 'Backend URL updated');
+  };
+
+  const handleViewLogs = () => {
+    const summary = perfLogger.getSummary();
+    setLogSummary(summary);
+    setShowLogModal(true);
+  };
+
+  const handleExportLogs = async () => {
+    await perfLogger.shareLogs();
+  };
+
+  const handleClearLogs = () => {
+    perfLogger.clearLogs();
+    Alert.alert('Cleared', 'Performance logs have been cleared');
   };
 
   return (
@@ -192,6 +210,86 @@ export default function SettingsScreen() {
           )}
         />
       </Card>
+
+      <SectionHeader title="Debug" />
+      <Card className="mx-5">
+        <SettingRow
+          icon={<Bug size={20} color="#f59e0b" />}
+          title="Performance Logs"
+          subtitle={`${perfLogger.getSummary().totalLogs} entries`}
+          onPress={handleViewLogs}
+        />
+        <View className="h-px bg-slate-700/50 mx-5" />
+        <SettingRow
+          icon={<Eye size={20} color="#3b82f6" />}
+          title="View Logs"
+          onPress={handleViewLogs}
+        />
+        <View className="h-px bg-slate-700/50 mx-5" />
+        <SettingRow
+          icon={<Share2 size={20} color="#3b82f6" />}
+          title="Export Logs"
+          subtitle="Share log file for analysis"
+          onPress={handleExportLogs}
+        />
+        <View className="h-px bg-slate-700/50 mx-5" />
+        <SettingRow
+          icon={<Trash2 size={20} color="#ef4444" />}
+          title="Clear Logs"
+          danger
+          onPress={handleClearLogs}
+        />
+      </Card>
+
+      <Modal
+        visible={showLogModal}
+        animationType="slide"
+        onRequestClose={() => setShowLogModal(false)}
+      >
+        <View className="flex-1 bg-slate-950">
+          <View className="px-5 py-4 border-b border-slate-800 flex-row items-center justify-between">
+            <Text className="text-white text-xl font-bold">Performance Logs</Text>
+            <TouchableOpacity onPress={() => setShowLogModal(false)}>
+              <Text className="text-blue-500 font-medium">Close</Text>
+            </TouchableOpacity>
+          </View>
+          
+          <ScrollView className="flex-1 p-5">
+            {logSummary && (
+              <View>
+                <Text className="text-white font-semibold mb-2">Summary</Text>
+                <Text className="text-slate-400 mb-4">
+                  Total logs: {logSummary.totalLogs}
+                </Text>
+                
+                <Text className="text-white font-semibold mb-2">Categories</Text>
+                {Object.entries(logSummary.categories).map(([category, count]) => (
+                  <Text key={category} className="text-slate-400">
+                    {category}: {count}
+                  </Text>
+                ))}
+                
+                {logSummary.slowOperations.length > 0 && (
+                  <>
+                    <Text className="text-white font-semibold mt-4 mb-2">Slow Operations (&gt;100ms)</Text>
+                    {logSummary.slowOperations.slice(0, 20).map((op, i) => (
+                      <Text key={i} className="text-slate-400 text-sm">
+                        [{op.category}] {op.event} ({op.duration?.toFixed(0)}ms)
+                      </Text>
+                    ))}
+                  </>
+                )}
+              </View>
+            )}
+          </ScrollView>
+          
+          <View className="p-5 border-t border-slate-800">
+            <Button onPress={handleExportLogs} fullWidth>
+              Export Logs
+            </Button>
+          </View>
+        </View>
+      </Modal>
 
       <View className="h-8" />
     </ScrollView>
