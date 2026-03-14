@@ -5,6 +5,7 @@ interface CardProps {
   children: ReactNode;
   className?: string;
   style?: ViewStyle;
+  variant?: 'default' | 'danger' | 'warning';
 }
 
 interface CardHeaderProps {
@@ -22,12 +23,19 @@ interface CardFooterProps {
   children: ReactNode;
 }
 
-function Card({ children, className = '', style }: CardProps) {
+function Card({ children, className = '', style, variant = 'default' }: CardProps) {
+  const variantStyles = {
+    default: 'bg-slate-800 border-slate-700/50',
+    danger: 'bg-red-950/30 border-red-500/40',
+    warning: 'bg-amber-950/30 border-amber-500/40',
+  };
+
   return (
     <View
       className={`
-        bg-slate-800 rounded-2xl
-        border border-slate-700/50
+        rounded-2xl
+        border
+        ${variantStyles[variant]}
         ${className}
       `}
       style={[

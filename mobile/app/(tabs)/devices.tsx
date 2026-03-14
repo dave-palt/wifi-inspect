@@ -3,6 +3,7 @@ import { View, Text, FlatList, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Video, Laptop, Smartphone, Tv, Router as RouterIcon, Home, HelpCircle, Shield, Wifi } from 'lucide-react-native';
 import { useDeviceStore } from '../../src/stores/scanStore';
+import { Card } from '../../src/components/Card';
 import { Badge } from '../../src/components/Badge';
 import { ThreatMeter } from '../../src/components/ThreatMeter';
 import type { Device } from '@shared/src/types/device';
@@ -43,54 +44,56 @@ export default function DevicesScreen() {
     
     return (
       <TouchableOpacity
-        className={`mx-4 mb-3 bg-slate-800 rounded-2xl ${isHighThreat ? 'border border-red-500/40' : ''}`}
+        className="mx-5 mb-3 active:opacity-70"
         onPress={() => handleDevicePress(item.mac)}
         activeOpacity={0.7}
       >
-        <View className="p-4 flex-row items-center gap-4">
-          <View className={`w-12 h-12 rounded-xl items-center justify-center ${
-            isHighThreat ? 'bg-red-500/20' : 'bg-slate-700/50'
-          }`}>
-            {getDeviceIcon(item.deviceType, isHighThreat)}
-          </View>
-          <View className="flex-1">
-            <View className="flex-row items-center gap-2">
-              <Text className="text-white font-semibold text-base flex-1" numberOfLines={1}>
-                {item.vendor || 'Unknown Device'}
-              </Text>
-              {item.isGateway && (
-                <Badge variant="info">Gateway</Badge>
+        <Card className={isHighThreat ? 'border-red-500/40' : ''}>
+          <View className="p-4 flex-row items-center gap-4">
+            <View className={`w-12 h-12 rounded-xl items-center justify-center ${
+              isHighThreat ? 'bg-red-500/20' : 'bg-slate-700/50'
+            }`}>
+              {getDeviceIcon(item.deviceType, isHighThreat)}
+            </View>
+            <View className="flex-1">
+              <View className="flex-row items-center gap-2">
+                <Text className="text-white font-semibold text-base flex-1" numberOfLines={1}>
+                  {item.vendor || 'Unknown Device'}
+                </Text>
+                {item.isGateway && (
+                  <Badge variant="info">Gateway</Badge>
+                )}
+              </View>
+              <Text className="text-slate-400 text-sm">{item.ip}</Text>
+            </View>
+            <View className="items-end">
+              <Text className="text-slate-500 text-xs mb-1">Threat</Text>
+              <View className="w-20">
+                <ThreatMeter level={item.threatLevel ?? 0} size="sm" />
+              </View>
+              {item.openPorts && item.openPorts.length > 0 && (
+                <View className="flex-row items-center gap-1 mt-1">
+                  <Wifi size={12} color="#64748b" />
+                  <Text className="text-slate-500 text-xs">
+                    {item.openPorts.length} port{item.openPorts.length > 1 ? 's' : ''}
+                  </Text>
+                </View>
               )}
             </View>
-            <Text className="text-slate-400 text-sm">{item.ip}</Text>
           </View>
-          <View className="items-end">
-            <Text className="text-slate-500 text-xs mb-1">Threat</Text>
-            <View className="w-20">
-              <ThreatMeter level={item.threatLevel ?? 0} size="sm" />
-            </View>
-            {item.openPorts && item.openPorts.length > 0 && (
-              <View className="flex-row items-center gap-1 mt-1">
-                <Wifi size={12} color="#64748b" />
-                <Text className="text-slate-500 text-xs">
-                  {item.openPorts.length} port{item.openPorts.length > 1 ? 's' : ''}
-                </Text>
-              </View>
-            )}
-          </View>
-        </View>
-        {item.threatReasons && item.threatReasons.length > 0 && (
-          <View className="px-4 pb-4">
-            <View className="pt-3 border-t border-slate-700">
-              <View className="flex-row items-center gap-2">
-                <Shield size={14} color="#ef4444" />
-                <Text className="text-red-400 text-[13px] flex-1" numberOfLines={1}>
-                  {item.threatReasons[0]}
-                </Text>
+          {item.threatReasons && item.threatReasons.length > 0 && (
+            <View className="px-4 pb-4 pt-0">
+              <View className="pt-3 border-t border-slate-700/50">
+                <View className="flex-row items-center gap-2">
+                  <Shield size={14} color="#ef4444" />
+                  <Text className="text-red-400 text-sm flex-1" numberOfLines={1}>
+                    {item.threatReasons[0]}
+                  </Text>
+                </View>
               </View>
             </View>
-          </View>
-        )}
+          )}
+        </Card>
       </TouchableOpacity>
     );
   };

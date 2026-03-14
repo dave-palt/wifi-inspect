@@ -192,9 +192,166 @@ cd mobile
 npx expo start --clear
 ```
 
+## UI Design Guidelines
+
+This project uses NativeWind v4 for styling. Follow these guidelines for ensure consistent UI across all screens.
+
+### Color Palette
+
+| Color | Usage | NativeWind Class |
+|-------|-------|------------------|
+| Background | Main app background | `bg-slate-950` |
+| Surface | Cards, elevated surfaces | `bg-slate-800` |
+| Border | Card borders, dividers | `border-slate-700/50` or `border-slate-800` |
+| Primary Text | Main headings | `text-white` |
+| Secondary Text | Subheadings, descriptions | `text-slate-400` |
+| Tertiary Text | Captions, hints | `text-slate-500` |
+| Primary Action | Buttons, links | `bg-blue-600` or `text-blue-500` |
+| Danger | Threats, errors | `bg-red-500` or `text-red-400` |
+| Warning | Caution states | `text-amber-500` or `bg-amber-500/20` |
+| Success | Safe states | `text-emerald-500` or `bg-emerald-500/20` |
+
+### Typography
+
+| Element | Classes |
+|---------|---------|
+| Screen Title | `text-white text-2xl font-bold` |
+| Screen Subtitle | `text-slate-400 text-sm mt-1` |
+| Section Header | `text-slate-500 text-xs font-semibold uppercase tracking-wider px-5 mb-2 mt-6` |
+| Card Title | `text-white font-semibold text-base` |
+| Body Text | `text-slate-300 text-sm` |
+| Caption | `text-slate-500 text-xs` |
+
+### Spacing
+
+| Element | Value |
+|---------|-------|
+| Screen padding | `px-5` or `p-5` |
+| Card margin | `mx-5 mb-3` |
+| Card internal padding | `p-4` |
+| Section gap | `gap-3` or `gap-4` |
+| Item gap in lists | `gap-4` |
+
+### Components
+
+#### Card
+Use `Card` component for content containers:
+
+```tsx
+import { Card } from '../components/Card';
+
+// Basic card
+<Card>
+  <View className="p-4">
+    <Text>Content</Text>
+  </View>
+</Card>
+
+// Danger variant for threats
+<Card variant="danger">
+  <View className="p-4">...</View>
+</Card>
+```
+
+#### Badge
+Use `Badge` for status indicators:
+
+```tsx
+import { Badge } from '../components/Badge';
+
+<Badge variant="info">Gateway</Badge>
+<Badge variant="danger">Camera</Badge>
+<Badge variant="success">Safe</Badge>
+<Badge variant="warning">Caution</Badge>
+```
+
+#### Button
+Use `Button` component for actions:
+
+```tsx
+import { Button } from '../components/Button';
+
+<Button variant="primary" onPress={handlePress} icon={<Icon />}>
+  Action
+</Button>
+
+<Button variant="danger" fullWidth>
+  Report
+</Button>
+```
+
+### Screen Layout Pattern
+
+Every list screen should follow this structure:
+
+```tsx
+export default function ScreenName() {
+  return (
+    <View className="flex-1 bg-slate-950">
+      {/* Header */}
+      <View className="px-5 py-4 border-b border-slate-800">
+        <Text className="text-white text-2xl font-bold">Screen Title</Text>
+        <Text className="text-slate-400 text-sm mt-1">
+          Subtitle text
+        </Text>
+      </View>
+
+      {/* Content */}
+      <FlatList
+        data={items}
+        renderItem={renderItem}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={{ paddingVertical: 16 }}
+        ListEmptyComponent={<EmptyState />}
+      />
+    </View>
+  );
+}
+```
+
+### List Item Pattern
+
+```tsx
+const renderItem = ({ item }) => (
+  <TouchableOpacity
+    className="mx-5 mb-3 active:opacity-70"
+    onPress={() => handlePress(item.id)}
+  >
+    <Card>
+      <View className="p-4 flex-row items-center gap-4">
+        <View className="w-12 h-12 rounded-xl bg-slate-700/50 items-center justify-center">
+          <Icon size={24} color="#94a3b8" />
+        </View>
+        <View className="flex-1">
+          <Text className="text-white font-semibold text-base">{item.title}</Text>
+          <Text className="text-slate-400 text-sm">{item.subtitle}</Text>
+        </View>
+      </View>
+    </Card>
+  </TouchableOpacity>
+);
+```
+
+### Empty State Pattern
+
+```tsx
+const EmptyState = () => (
+  <View className="flex-1 items-center justify-center py-20 px-5">
+    <View className="w-16 h-16 rounded-full bg-slate-800 items-center justify-center mb-4">
+      <Icon size={32} color="#64748b" />
+    </View>
+    <Text className="text-white text-xl font-semibold mb-2">No Items Found</Text>
+    <Text className="text-slate-400 text-center">
+      Description of what to do next
+    </Text>
+  </View>
+);
+```
+
 ## Resources
 
 - [Expo Documentation](https://docs.expo.dev)
 - [React Native](https://reactnative.dev)
+- [NativeWind v4](https://www.nativewind.dev)
 - [Bun Documentation](https://bun.sh)
 - [PostgreSQL Documentation](https://www.postgresql.org/docs/)
