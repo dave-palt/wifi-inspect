@@ -133,7 +133,12 @@ export function useNetworkScan() {
     }
     
     perfLogger.endTrace('checkNetworkStatus', { success: true, ssid: result.networkInfo?.ssid });
-  }, [permissions, setCurrentNetwork]);
+  }, [
+    permissions.isChecking,
+    permissions.locationPermission,
+    permissions.locationServicesEnabled,
+    setCurrentNetwork,
+  ]);
 
   const startScan = useCallback(async () => {
     perfLogger.startTrace('startScan');
@@ -194,7 +199,7 @@ export function useNetworkScan() {
   const retry = useCallback(async () => {
     await permissions.checkPermissions();
     await checkNetworkStatus();
-  }, [permissions, checkNetworkStatus]);
+  }, [permissions.checkPermissions, checkNetworkStatus]);
 
   useEffect(() => {
     checkNetworkStatus();

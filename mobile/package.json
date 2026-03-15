@@ -9,7 +9,9 @@
     "dev:ios": "expo start --ios",
     "build:android": "expo prebuild --clean && cd android && ./gradlew assembleRelease",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "android": "expo run:android",
+    "ios": "expo run:ios"
   },
   "dependencies": {
     "@expo/metro-runtime": "~3.2.0",
