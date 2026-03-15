@@ -7,15 +7,25 @@ const workspaceRoot = path.resolve(projectRoot, '..');
 
 const config = getDefaultConfig(projectRoot);
 
-config.watchFolders = [workspaceRoot];
+config.resolver.nodeModulesPaths = [
+  path.resolve(workspaceRoot, 'node_modules'),
+];
 
-config.resolver = {
-  ...config.resolver,
-  nodeModulesPaths: [
-    path.resolve(projectRoot, 'node_modules'),
-    path.resolve(workspaceRoot, 'node_modules'),
-  ],
-  disableHierarchicalLookup: true,
+config.resolver.disableHierarchicalLookup = false;
+
+const escapeRegExp = (str) => str.replace(/[-[/\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+
+config.resolver.blockList = [
+  new RegExp(escapeRegExp(path.resolve(workspaceRoot, 'server')) + '.*'),
+];
+
+config.resolver.extraNodeModules = {
+  '@shared/src': path.resolve(workspaceRoot, 'shared/src'),
+};
+
+config.watcher = {
+  ...config.watcher,
+  additionalExts: ['js', 'jsx', 'ts', 'tsx', 'json', 'css'],
 };
 
 module.exports = withNativeWind(config, { input: './src/global.css' });

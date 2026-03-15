@@ -4,9 +4,15 @@
     "strict": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"],
-      "@shared/src/*": ["../shared/src/*"],
-      "network-scanner": ["./modules/network-scanner/src/index.ts"]
+      "@/*": [
+        "./src/*"
+      ],
+      "@shared/src/*": [
+        "../shared/src/*"
+      ],
+      "network-scanner": [
+        "./modules/network-scanner/src/index.ts"
+      ]
     }
   },
   "include": [
@@ -16,6 +22,7 @@
     "expo-env.d.ts",
     "nativewind.d.ts",
     "../shared/src/**/*.ts",
-    "../shared/src/**/*.tsx"
+    "../shared/src/**/*.tsx",
+    "nativewind-env.d.ts"
   ]
 }
