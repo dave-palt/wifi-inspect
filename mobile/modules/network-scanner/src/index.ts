@@ -1,4 +1,4 @@
-import { NativeModules, NativeEventEmitter, Platform, EmitterSubscription, NativeModule } from 'react-native';
+import { NativeModules, NativeEventEmitter, Platform, EmitterSubscription } from 'react-native';
 
 export interface NetworkInfo {
   ssid: string;
