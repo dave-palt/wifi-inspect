@@ -1,11 +1,13 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useDeviceStore } from '../stores/scanStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { 
   scanNetwork, 
   getNetworkInfoWithDebug, 
   isNativeModuleAvailable,
-  NetworkInfoError 
+  NetworkInfoError,
+  startBackgroundScan,
+  type BackgroundScanController,
 } from '../services/networkScanner';
 import { usePermissions } from './usePermissions';
 import { perfLogger } from '../utils/perfLogger';
@@ -39,17 +41,20 @@ export function useNetworkScan() {
     devices,
     lastScanTime,
     isScanning,
+    isCancelling,
     scanProgress,
     scanMessage,
     setCurrentNetwork,
     addDevice,
     setLastScanTime,
     setIsScanning,
+    setIsCancelling,
     setScanProgress,
     clearScan,
   } = useDeviceStore();
 
   const { customPorts, scanAllSubnets } = useSettingsStore();
+  const scanRef = useRef<BackgroundScanController | null>(null);
 
   const permissions = usePermissions();
   
@@ -163,38 +168,39 @@ export function useNetworkScan() {
     setScanProgress(0, 'Starting scan...');
     clearScan();
 
-    let deviceCount = 0;
-    let progressUpdates = 0;
+    scanRef.current = startBackgroundScan({
+      onDeviceFound: (device) => {
+        perfLogger.log('scan', 'device_found', { ip: device.ip, type: device.deviceType });
+        addDevice(device);
+      },
+      onProgress: (progress, message) => {
+        perfLogger.log('scan', 'progress', { progress, message });
+        setScanProgress(progress, message);
+      },
+      onComplete: (totalDevices, cancelled) => {
+        setIsScanning(false);
+        setIsCancelling(false);
+        if (!cancelled) {
+          setLastScanTime(Date.now());
+        }
+        setScanProgress(100, cancelled ? 'Scan cancelled' : 'Scan complete');
+        perfLogger.endTrace('startScan', { success: true, totalDevices, cancelled });
+      },
+      onError: (error) => {
+        setIsScanning(false);
+        setIsCancelling(false);
+        console.error('Scan error:', error);
+        perfLogger.endTrace('startScan', { success: false, error: error.message });
+      },
+    }, { customPorts });
+  }, [isScanning, blockReason, blockMessage, checkNetworkStatus, setIsScanning, setIsCancelling, setScanProgress, clearScan, addDevice, setLastScanTime, customPorts]);
 
-    try {
-      perfLogger.mark('scanNetwork:start');
-      await scanNetwork({
-        onDeviceFound: (device) => {
-          deviceCount++;
-          perfLogger.log('scan', 'device_found', { ip: device.ip, type: device.deviceType, count: deviceCount });
-          addDevice(device);
-        },
-        onProgress: (progress, message) => {
-          progressUpdates++;
-          perfLogger.log('scan', 'progress', { progress, message, updateCount: progressUpdates });
-          setScanProgress(progress, message);
-        },
-      }, { customPorts, scanAllSubnets });
-      perfLogger.measure('scanNetwork', 'scanNetwork:start', { deviceCount, progressUpdates });
-      
-      setLastScanTime(Date.now());
-      perfLogger.endTrace('startScan', { success: true, deviceCount });
-    } catch (error) {
-      console.error('Scan failed:', error);
-      perfLogger.endTrace('startScan', { success: false, error: String(error) });
-      throw error;
-    } finally {
-      perfLogger.log('scan', 'finishing');
-      setIsScanning(false);
-      setScanProgress(100, 'Scan complete');
-      perfLogger.log('scan', 'finished');
+  const cancelScan = useCallback(async () => {
+    if (scanRef.current && isScanning) {
+      setIsCancelling(true);
+      scanRef.current.cancel();
     }
-  }, [isScanning, blockReason, blockMessage, checkNetworkStatus, setIsScanning, setScanProgress, clearScan, addDevice, setLastScanTime, customPorts, scanAllSubnets]);
+  }, [isScanning, setIsCancelling]);
 
   const retry = useCallback(async () => {
     await permissions.checkPermissions();
@@ -216,6 +222,7 @@ export function useNetworkScan() {
     devices,
     lastScanTime,
     isScanning,
+    isCancelling,
     scanProgress,
     scanMessage,
     blockReason,
@@ -223,6 +230,7 @@ export function useNetworkScan() {
     networkError,
     canScan: !blockReason && !isScanning,
     startScan,
+    cancelScan,
     checkNetworkStatus,
     retry,
     setCurrentNetwork,

@@ -10,6 +10,7 @@ interface ScanState {
   devices: Device[];
   lastScanTime: number | null;
   isScanning: boolean;
+  isCancelling: boolean;
   scanProgress: number;
   scanMessage: string;
   
@@ -19,6 +20,7 @@ interface ScanState {
   updateDevice: (mac: string, updates: Partial<Device>) => void;
   setLastScanTime: (time: number) => void;
   setIsScanning: (scanning: boolean) => void;
+  setIsCancelling: (cancelling: boolean) => void;
   setScanProgress: (progress: number, message?: string) => void;
   clearScan: () => void;
 }
@@ -28,6 +30,7 @@ export const useDeviceStore = create<ScanState>((set, get) => ({
   devices: [],
   lastScanTime: null,
   isScanning: false,
+  isCancelling: false,
   scanProgress: 0,
   scanMessage: '',
 
@@ -75,6 +78,11 @@ export const useDeviceStore = create<ScanState>((set, get) => ({
       progressUpdateCount = 0;
     }
     set({ isScanning: scanning });
+  },
+  
+  setIsCancelling: (cancelling) => {
+    perfLogger.log('store', 'setIsCancelling', { cancelling });
+    set({ isCancelling: cancelling });
   },
   
   setScanProgress: (progress, message) => {

@@ -93,19 +93,37 @@ mobile/src/
 
 ## Key Components
 
-### NetworkScanner (Android Native)
+### NetworkScanner (Android Native Module)
 
-Located in `mobile/native/android/`, this module provides:
-- ARP table reading for device discovery
-- Raw socket port scanning
-- Network interface enumeration
+Located in `mobile/modules/network-scanner/`, this native module provides:
 
-### ThreatAnalyzer
+**Core Scanning:**
+- `BackgroundScanner.java` - Runs full network scan in background thread with event-based progress
+- `ArpScanner.java` - ARP table reading for device discovery
+- `PortScanner.java` - Raw socket port scanning with thread pool
+- `NetworkUtils.java` - Network interface enumeration, ping utility
 
-Located in `mobile/src/services/threatAnalyzer.ts`:
-- Analyzes discovered devices for security risks
-- Scores devices based on device type, open ports
-- Generates threat reasons for UI display
+**Device Analysis (Native):**
+- `VendorLookup.java` - OUI database for MAC address vendor lookup (~100 vendors)
+- `DeviceClassifier.java` - Classifies devices as camera/router/unknown based on vendor/ports
+- `ThreatAnalyzer.java` - Calculates threat level 0-5 with reasons
+- `CameraDiscovery.java` - HTTP probing for camera snapshot URLs
+
+**Event-Based Architecture:**
+The scanner runs entirely in a native background thread, emitting events to JS:
+- `ScanProgress` - Progress percentage and status message (throttled to 10/sec)
+- `DeviceFound` - Complete device info including vendor, type, ports, threat level
+- `ScanComplete` - Final summary with device count
+- `ScanError` - Error details if scan fails
+
+### JS Services
+
+Located in `mobile/src/services/`:
+- `networkScanner.ts` - JS wrapper for native scan with event subscription
+- `vendorLookup.ts` - Fallback OUI lookup (larger database, ~1000 vendors)
+- `deviceClassifier.ts` - Fallback classification logic
+- `threatAnalyzer.ts` - Fallback threat analysis
+- `cameraDiscovery.ts` - Fallback camera endpoint discovery
 
 ### API Client
 
@@ -355,3 +373,27 @@ const EmptyState = () => (
 - [NativeWind v4](https://www.nativewind.dev)
 - [Bun Documentation](https://bun.sh)
 - [PostgreSQL Documentation](https://www.postgresql.org/docs/)
+
+## Future Improvements
+
+### iOS Support
+The current native scanner only works on Android. To add iOS support:
+- Create an iOS native module in `mobile/modules/network-scanner/ios/`
+- Implement similar background scanning using Swift/Obj-C
+- Use Apple's Network framework for device discovery
+
+### OUI Database Expansion
+The native `VendorLookup.java` has ~100 vendors. To expand:
+- Add more vendors from the IEEE OUI database
+- Consider loading from a bundled JSON file for easier updates
+- JS fallback in `vendorLookup.ts` has ~1000 vendors
+
+### Background Scan Improvements
+- Add scan history persistence (store previous scan results)
+- Implement scheduled background scans when connected to new networks
+- Add notification when high-threat devices are detected
+
+### Performance Optimizations
+- Reduce camera discovery timeout for faster scans
+- Implement incremental scanning (only scan new IPs)
+- Cache ARP table results between scans

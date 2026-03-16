@@ -6,10 +6,15 @@ import NetworkScanner, {
   scanPorts as nativeScanPorts,
   ping as nativePing,
   getAllNetworkInterfaces as nativeGetAllInterfaces,
-  type NetworkInfo as NativeNetworkInfoResponse,
-  type InterfaceInfo
+  startFullScan,
+  cancelScan,
+  addScanProgressListener,
+  addDeviceFoundListener,
+  addScanCompleteListener,
+  addScanErrorListener,
+  type DeviceFoundEvent,
 } from 'network-scanner';
-import type { Device, NetworkInfo, Port } from '@shared/src/types/device';
+import type { Device, NetworkInfo, Port, DeviceType, ThreatLevel } from '@shared/src/types/device';
 import { getDeviceManufacturer } from './vendorLookup';
 import { classifyDevice } from './deviceClassifier';
 import { analyzeThreatLevel } from './threatAnalyzer';
@@ -419,3 +424,79 @@ export async function pingDevice(ip: string): Promise<{ success: boolean; time?:
 }
 
 export { isNativeModuleAvailable };
+
+export interface BackgroundScanCallbacks {
+  onDeviceFound: (device: Device) => void;
+  onProgress: (progress: number, message: string) => void;
+  onComplete: (totalDevices: number, cancelled: boolean) => void;
+  onError: (error: Error) => void;
+}
+
+export interface BackgroundScanController {
+  cancel: () => void;
+}
+
+export function startBackgroundScan(
+  callbacks: BackgroundScanCallbacks,
+  options?: { customPorts?: number[] }
+): BackgroundScanController {
+  const ports = getPortsToScan(options?.customPorts ?? []);
+  
+  const progressSub = addScanProgressListener(({ progress, message }) => {
+    callbacks.onProgress(progress, message);
+  });
+  
+  const deviceSub = addDeviceFoundListener((event) => {
+    const device: Device = {
+      mac: event.mac,
+      ip: event.ip,
+      hostname: event.hostname,
+      vendor: event.vendor,
+      deviceType: event.deviceType as DeviceType,
+      firstSeen: Date.now(),
+      lastSeen: Date.now(),
+      openPorts: event.openPorts?.map(p => ({
+        number: p.number,
+        protocol: p.protocol as 'tcp' | 'udp',
+        service: p.service,
+        state: 'open' as const,
+      })),
+      isGateway: event.isGateway,
+      threatLevel: event.threatLevel as ThreatLevel,
+      threatReasons: event.threatReasons,
+      cameraEndpoints: event.snapshotUrl ? {
+        snapshotUrl: event.snapshotUrl,
+        requiresAuth: event.requiresAuth,
+      } : undefined,
+    };
+    callbacks.onDeviceFound(device);
+  });
+  
+  const completeSub = addScanCompleteListener(({ totalDevices, cancelled }) => {
+    cleanup();
+    callbacks.onComplete(totalDevices, cancelled);
+  });
+  
+  const errorSub = addScanErrorListener(({ code, message }) => {
+    cleanup();
+    callbacks.onError(new Error(`${code}: ${message}`));
+  });
+  
+  const cleanup = () => {
+    progressSub.remove();
+    deviceSub.remove();
+    completeSub.remove();
+    errorSub.remove();
+  };
+  
+  startFullScan(ports).catch((error) => {
+    cleanup();
+    callbacks.onError(error);
+  });
+  
+  return {
+    cancel: async () => {
+      await cancelScan();
+    },
+  };
+}

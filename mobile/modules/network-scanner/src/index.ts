@@ -1,4 +1,4 @@
-import { NativeModules, Platform } from 'react-native';
+import { NativeModules, NativeEventEmitter, Platform, EmitterSubscription, NativeModule } from 'react-native';
 
 export interface NetworkInfo {
   ssid: string;
@@ -41,6 +41,35 @@ export interface InterfaceInfo {
   isUp: boolean;
 }
 
+export interface ScanProgressEvent {
+  progress: number;
+  message: string;
+}
+
+export interface DeviceFoundEvent {
+  mac: string;
+  ip: string;
+  hostname?: string;
+  vendor: string;
+  deviceType: string;
+  openPorts: PortInfo[];
+  isGateway: boolean;
+  threatLevel: number;
+  threatReasons: string[];
+  snapshotUrl?: string;
+  requiresAuth?: boolean;
+}
+
+export interface ScanCompleteEvent {
+  totalDevices: number;
+  cancelled: boolean;
+}
+
+export interface ScanErrorEvent {
+  code: string;
+  message: string;
+}
+
 interface NativeNetworkScanner {
   getNetworkInfo(): Promise<NetworkInfo>;
   getArpTable(): Promise<ArpEntry[]>;
@@ -51,9 +80,15 @@ interface NativeNetworkScanner {
   hasRootPermission(): Promise<boolean>;
   rootArpScan(subnet: string): Promise<ArpEntry[]>;
   getAllNetworkInterfaces(): Promise<InterfaceInfo[]>;
+  startFullScan(ports: number[]): Promise<boolean>;
+  cancelScan(): Promise<boolean>;
+  addListener(eventName: string): void;
+  removeListeners(count: number): void;
 }
 
-const NetworkScanner: NativeNetworkScanner = NativeModules.NetworkScanner || {
+const NativeModule = NativeModules.NetworkScanner;
+
+const NetworkScanner: NativeNetworkScanner = NativeModule || {
   getNetworkInfo: async () => ({ error: 'NATIVE_MODULE_UNAVAILABLE', message: 'Network scanner not available' } as NetworkInfo),
   getArpTable: async () => [],
   scanPorts: async () => [],
@@ -63,7 +98,13 @@ const NetworkScanner: NativeNetworkScanner = NativeModules.NetworkScanner || {
   hasRootPermission: async () => false,
   rootArpScan: async () => [],
   getAllNetworkInterfaces: async () => [],
+  startFullScan: async () => false,
+  cancelScan: async () => false,
+  addListener: () => {},
+  removeListeners: () => {},
 };
+
+const eventEmitter = NativeModule ? new NativeEventEmitter(NativeModule) : null;
 
 export const isNativeModuleAvailable = (): boolean => {
   return Platform.OS === 'android' && !!NativeModules.NetworkScanner;
@@ -104,5 +145,49 @@ export const rootArpScan = (subnet: string): Promise<ArpEntry[]> => {
 export const getAllNetworkInterfaces = (): Promise<InterfaceInfo[]> => {
   return NetworkScanner.getAllNetworkInterfaces();
 };
+
+export const startFullScan = (ports: number[]): Promise<boolean> => {
+  return NetworkScanner.startFullScan(ports);
+};
+
+export const cancelScan = (): Promise<boolean> => {
+  return NetworkScanner.cancelScan();
+};
+
+export function addScanProgressListener(
+  callback: (event: ScanProgressEvent) => void
+): EmitterSubscription {
+  if (!eventEmitter) {
+    return { remove: () => {} } as EmitterSubscription;
+  }
+  return eventEmitter.addListener('ScanProgress', callback);
+}
+
+export function addDeviceFoundListener(
+  callback: (event: DeviceFoundEvent) => void
+): EmitterSubscription {
+  if (!eventEmitter) {
+    return { remove: () => {} } as EmitterSubscription;
+  }
+  return eventEmitter.addListener('DeviceFound', callback);
+}
+
+export function addScanCompleteListener(
+  callback: (event: ScanCompleteEvent) => void
+): EmitterSubscription {
+  if (!eventEmitter) {
+    return { remove: () => {} } as EmitterSubscription;
+  }
+  return eventEmitter.addListener('ScanComplete', callback);
+}
+
+export function addScanErrorListener(
+  callback: (event: ScanErrorEvent) => void
+): EmitterSubscription {
+  if (!eventEmitter) {
+    return { remove: () => {} } as EmitterSubscription;
+  }
+  return eventEmitter.addListener('ScanError', callback);
+}
 
 export default NetworkScanner;

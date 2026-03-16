@@ -55,6 +55,7 @@ export default function ScanScreen() {
   
   const { 
     startScan, 
+    cancelScan,
     currentNetwork, 
     blockReason, 
     blockMessage,
@@ -62,6 +63,7 @@ export default function ScanScreen() {
     retry,
     permissions,
     isScanning,
+    isCancelling,
     scanProgress,
     scanMessage,
   } = useNetworkScan();
@@ -255,14 +257,14 @@ export default function ScanScreen() {
           <>
             <FAB
               size="xl"
-              onPress={handleScan}
-              loading={isScanning}
-              disabled={!canScan}
+              onPress={isScanning ? cancelScan : handleScan}
+              loading={isScanning && !isCancelling}
+              disabled={!canScan && !isScanning}
               icon={<Radio size={52} color="#fff" />}
-              label={'Scan Network'}
-              sublabel={!currentNetwork ? 'Checking connection...' : deviceCount > 0 ? `${deviceCount} devices found` : 'Tap to detect devices'}
+              label={isScanning ? (isCancelling ? 'Cancelling...' : 'Cancel') : 'Scan Network'}
+              sublabel={isScanning ? scanMessage : !currentNetwork ? 'Checking connection...' : deviceCount > 0 ? `${deviceCount} devices found` : 'Tap to detect devices'}
               progress={scanProgress}
-              progressMessage={scanMessage}
+              progressMessage={isScanning ? scanMessage : undefined}
             />
 
             {lastScanTime && (

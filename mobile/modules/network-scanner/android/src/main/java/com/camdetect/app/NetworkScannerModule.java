@@ -31,6 +31,7 @@ public class NetworkScannerModule extends ReactContextBaseJavaModule {
     private final ConnectivityManager connectivityManager;
     private final ArpScanner arpScanner;
     private final PortScanner portScanner;
+    private BackgroundScanner backgroundScanner;
 
     public NetworkScannerModule(ReactApplicationContext reactContext) {
         super(reactContext);
@@ -39,6 +40,7 @@ public class NetworkScannerModule extends ReactContextBaseJavaModule {
         this.connectivityManager = (ConnectivityManager) reactContext.getSystemService(Context.CONNECTIVITY_SERVICE);
         this.arpScanner = new ArpScanner();
         this.portScanner = new PortScanner();
+        this.backgroundScanner = new BackgroundScanner(reactContext);
         Log.d(TAG, "NetworkScannerModule initialized");
     }
 
@@ -348,5 +350,68 @@ public class NetworkScannerModule extends ReactContextBaseJavaModule {
             Log.e(TAG, "Error in getAllNetworkInterfaces: " + e.getMessage());
             promise.reject("GET_INTERFACES_ERROR", e.getMessage());
         }
+    }
+
+    @ReactMethod
+    public void startFullScan(com.facebook.react.bridge.ReadableArray ports, Promise promise) {
+        Log.d(TAG, "startFullScan called");
+        
+        if (backgroundScanner.isScanning()) {
+            promise.reject("ALREADY_SCANNING", "Scan already in progress");
+            return;
+        }
+        
+        if (!hasLocationPermission()) {
+            promise.reject("PERMISSION_DENIED", "Location permission required");
+            return;
+        }
+        
+        if (!isWifiConnectedViaConnectivityManager()) {
+            promise.reject("NOT_CONNECTED", "Not connected to WiFi");
+            return;
+        }
+        
+        String deviceIp = NetworkUtils.getDeviceIpAddress();
+        int gateway = NetworkUtils.getGatewayAddress(reactContext);
+        String gatewayIp = intToIp(gateway);
+        String subnet = getSubnet(deviceIp);
+        
+        if (deviceIp == null || deviceIp.equals("0.0.0.0") || deviceIp.isEmpty()) {
+            promise.reject("NO_IP", "Could not get device IP");
+            return;
+        }
+        
+        List<Integer> portList = new ArrayList<>();
+        if (ports != null) {
+            for (int i = 0; i < ports.size(); i++) {
+                portList.add(ports.getInt(i));
+            }
+        }
+        
+        backgroundScanner.startScan(portList, gatewayIp, subnet, deviceIp);
+        promise.resolve(true);
+    }
+
+    @ReactMethod
+    public void cancelScan(Promise promise) {
+        Log.d(TAG, "cancelScan called");
+        backgroundScanner.cancel();
+        promise.resolve(true);
+    }
+    
+    private String intToIp(int i) {
+        return ((i) & 0xFF) + "." +
+               ((i >> 8) & 0xFF) + "." +
+               ((i >> 16) & 0xFF) + "." +
+               ((i >> 24) & 0xFF);
+    }
+    
+    private String getSubnet(String ip) {
+        if (ip == null) return "";
+        String[] parts = ip.split("\\.");
+        if (parts.length >= 3) {
+            return parts[0] + "." + parts[1] + "." + parts[2];
+        }
+        return "";
     }
 }
