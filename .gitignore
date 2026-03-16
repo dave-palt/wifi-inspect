@@ -16,7 +16,7 @@ build/
 web-build/
 
 # Native
-android/
+/mobile/android/
 ios/
 native/
 !ios/LocalPods/
