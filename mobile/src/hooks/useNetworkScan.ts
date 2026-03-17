@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { AppState, AppStateStatus } from 'react-native';
 import { useDeviceStore } from '../stores/scanStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { 
@@ -9,6 +10,7 @@ import {
   startBackgroundScan,
   type BackgroundScanController,
 } from '../services/networkScanner';
+import { updateCachedDevices } from '../services/networkCache';
 import { usePermissions } from './usePermissions';
 import { perfLogger } from '../utils/perfLogger';
 import type { Device, NetworkInfo } from '@shared/src/types/device';
@@ -46,15 +48,19 @@ export function useNetworkScan() {
     scanMessage,
     setCurrentNetwork,
     addDevice,
+    addDevices,
     setLastScanTime,
     setIsScanning,
     setIsCancelling,
     setScanProgress,
-    clearScan,
+    persistToCache,
+    markAllDevicesPending,
+    removePendingDevices,
   } = useDeviceStore();
 
   const { customPorts, scanAllSubnets } = useSettingsStore();
   const scanRef = useRef<BackgroundScanController | null>(null);
+  const appStateRef = useRef<AppStateStatus>('active');
 
   const permissions = usePermissions();
   
@@ -164,9 +170,9 @@ export function useNetworkScan() {
     }
 
     perfLogger.log('scan', 'starting');
+    markAllDevicesPending();
     setIsScanning(true);
     setScanProgress(0, 'Starting scan...');
-    clearScan();
 
     scanRef.current = startBackgroundScan({
       onDeviceFound: (device) => {
@@ -177,12 +183,16 @@ export function useNetworkScan() {
         perfLogger.log('scan', 'progress', { progress, message });
         setScanProgress(progress, message);
       },
-      onComplete: (totalDevices, cancelled) => {
+      onComplete: async (totalDevices, cancelled) => {
         setIsScanning(false);
         setIsCancelling(false);
+        
         if (!cancelled) {
+          removePendingDevices();
           setLastScanTime(Date.now());
+          await persistToCache();
         }
+        
         setScanProgress(100, cancelled ? 'Scan cancelled' : 'Scan complete');
         perfLogger.endTrace('startScan', { success: true, totalDevices, cancelled });
       },
@@ -193,7 +203,7 @@ export function useNetworkScan() {
         perfLogger.endTrace('startScan', { success: false, error: error.message });
       },
     }, { customPorts });
-  }, [isScanning, blockReason, blockMessage, checkNetworkStatus, setIsScanning, setIsCancelling, setScanProgress, clearScan, addDevice, setLastScanTime, customPorts]);
+  }, [isScanning, blockReason, blockMessage, checkNetworkStatus, setIsScanning, setIsCancelling, setScanProgress, addDevice, setLastScanTime, persistToCache, markAllDevicesPending, removePendingDevices, customPorts]);
 
   const cancelScan = useCallback(async () => {
     if (scanRef.current && isScanning) {
@@ -201,6 +211,32 @@ export function useNetworkScan() {
       scanRef.current.cancel();
     }
   }, [isScanning, setIsCancelling]);
+
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      const previousState = appStateRef.current;
+      appStateRef.current = nextAppState;
+      
+      if (previousState !== 'active' && nextAppState === 'active') {
+        perfLogger.log('appState', 'foreground', { wasScanning: isScanning });
+        
+        if (scanRef.current && isScanning) {
+          const pendingDevices = scanRef.current.flush();
+          if (pendingDevices.length > 0) {
+            perfLogger.log('appState', 'flushed_pending_devices', { count: pendingDevices.length });
+            addDevices(pendingDevices);
+          }
+        }
+        
+        if (currentNetwork && devices.length > 0) {
+          persistToCache();
+        }
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription.remove();
+  }, [isScanning, currentNetwork, devices.length, addDevices, persistToCache]);
 
   const retry = useCallback(async () => {
     await permissions.checkPermissions();

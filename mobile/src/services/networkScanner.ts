@@ -434,6 +434,7 @@ export interface BackgroundScanCallbacks {
 
 export interface BackgroundScanController {
   cancel: () => void;
+  flush: () => Device[];
 }
 
 export function startBackgroundScan(
@@ -445,6 +446,16 @@ export function startBackgroundScan(
   const progressSub = addScanProgressListener(({ progress, message }) => {
     callbacks.onProgress(progress, message);
   });
+  
+  let pendingDevices: Device[] = [];
+  let rafScheduled = false;
+  
+  const flushDevices = () => {
+    const toAdd = [...pendingDevices];
+    pendingDevices = [];
+    rafScheduled = false;
+    toAdd.forEach(device => callbacks.onDeviceFound(device));
+  };
   
   const deviceSub = addDeviceFoundListener((event) => {
     const device: Device = {
@@ -469,10 +480,20 @@ export function startBackgroundScan(
         requiresAuth: event.requiresAuth,
       } : undefined,
     };
-    callbacks.onDeviceFound(device);
+    
+    pendingDevices.push(device);
+    if (!rafScheduled) {
+      rafScheduled = true;
+      requestAnimationFrame(flushDevices);
+    }
   });
   
   const completeSub = addScanCompleteListener(({ totalDevices, cancelled }) => {
+    if (pendingDevices.length > 0) {
+      pendingDevices.forEach(device => callbacks.onDeviceFound(device));
+      pendingDevices = [];
+      rafScheduled = false;
+    }
     cleanup();
     callbacks.onComplete(totalDevices, cancelled);
   });
@@ -487,6 +508,8 @@ export function startBackgroundScan(
     deviceSub.remove();
     completeSub.remove();
     errorSub.remove();
+    pendingDevices = [];
+    rafScheduled = false;
   };
   
   startFullScan(ports).catch((error) => {
@@ -497,6 +520,12 @@ export function startBackgroundScan(
   return {
     cancel: async () => {
       await cancelScan();
+    },
+    flush: () => {
+      const toAdd = [...pendingDevices];
+      pendingDevices = [];
+      rafScheduled = false;
+      return toAdd;
     },
   };
 }

@@ -18,6 +18,7 @@ export interface Device {
   threatLevel?: ThreatLevel;
   threatReasons?: string[];
   cameraEndpoints?: CameraEndpoints;
+  stale?: boolean;
 }
 
 export type DeviceType = 
